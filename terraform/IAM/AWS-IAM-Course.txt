@@ -1,0 +1,1715 @@
+AWS IAM Course Outline: From Basic to Advanced
+Module 1: Introduction to AWS IAM (Identity and Access Management)
+1.1 What is AWS IAM?
+
+Overview of IAM in AWS
+Importance of IAM in Cloud Security
+Key concepts: users, groups, roles, policies, permissions
+How IAM fits into AWS services
+Example/Demo:
+
+Demo: Create an IAM user with basic permissions and demonstrate logging in using AWS Console.
+
+# Define the AWS Provider
+provider "aws" {
+  region = "us-east-1"  # Set to your preferred AWS region
+}
+
+# Create an IAM User
+resource "aws_iam_user" "basic_user" {
+  name = "basic-user"
+}
+
+# Create an IAM policy (for example, AmazonS3ReadOnlyAccess)
+resource "aws_iam_policy" "s3_readonly_policy" {
+  name        = "S3ReadOnlyPolicy"
+  description = "Allows read-only access to S3"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = "s3:ListBucket"
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::*"
+      },
+      {
+        Action   = "s3:GetObject"
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::*/*"
+      }
+    ]
+  })
+}
+
+# Attach the policy to the user
+resource "aws_iam_user_policy_attachment" "basic_user_policy_attachment" {
+  user       = aws_iam_user.basic_user.name
+  policy_arn = aws_iam_policy.s3_readonly_policy.arn
+}
+
+# Output the User Access Information
+output "user_access_key_id" {
+  value = aws_iam_access_key.basic_user_access_key.id
+}
+
+output "user_secret_access_key" {
+  value = aws_iam_access_key.basic_user_access_key.secret
+}
+
+# Create the access keys for the IAM user to use with AWS CLI/SDK
+resource "aws_iam_access_key" "basic_user_access_key" {
+  user = aws_iam_user.basic_user.name
+}
+----------------------------------------
+1.2 IAM Terminology
+
+Identity: Users, Groups, and Roles
+Access Control: Policies, Permissions
+Security Credentials: Access Keys, Secret Keys, MFA
+Resources and Services in AWS
+Example/Demo:
+
+Demo: Create a user, assign it to a group, and attach a managed policy.
+Example: Show how to generate access keys for an IAM user.
+--------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region provided by variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_names" {
+  description = "List of IAM user names to be created"
+  type        = list(string)
+  default     = ["user1", "user2"]  # Example list of IAM users
+}
+
+variable "group_name" {
+  description = "The IAM group to assign users to"
+  type        = string
+  default     = "developers"  # Default group for developers
+}
+
+variable "managed_policy_arn" {
+  description = "The ARN of the managed IAM policy to attach"
+  type        = string
+  default     = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"  # Example policy: S3 Read-Only Access
+}
+
+# 3. Create an IAM Group (if not already existing)
+resource "aws_iam_group" "group" {
+  name = var.group_name
+}
+
+# 4. Loop to Create IAM Users from the input list
+resource "aws_iam_user" "users" {
+  count = length(var.user_names)  # Loop through each user name
+
+  name = var.user_names[count.index]  # Assign the name based on the loop index
+}
+
+# 5. Attach Users to the IAM Group using a Loop
+resource "aws_iam_group_membership" "group_membership" {
+  count = length(var.user_names)  # Loop through users for membership
+
+  group = aws_iam_group.group.name  # Attach each user to the group
+  users = [aws_iam_user.users[count.index].name]  # Attach the corresponding user
+}
+
+# 6. Attach Managed Policy to IAM Group
+resource "aws_iam_policy_attachment" "group_policy_attachment" {
+  name       = "${var.group_name}-policy-attachment"
+  policy_arn = var.managed_policy_arn  # Attach the managed policy to the group
+  groups     = [aws_iam_group.group.name]
+}
+
+# 7. Create Access Keys for the IAM Users using a Loop
+resource "aws_iam_access_key" "user_access_keys" {
+  count = length(var.user_names)  # Loop through each user to create access keys
+
+  user = aws_iam_user.users[count.index].name  # Assign access keys to the respective user
+}
+
+# 8. Output the Access Key ID and Secret Access Key for each user
+output "access_keys" {
+  value = [
+    for i in range(length(var.user_names)) : {
+      user_name        = aws_iam_user.users[i].name
+      access_key_id    = aws_iam_access_key.user_access_keys[i].id
+      secret_access_key = aws_iam_access_key.user_access_keys[i].secret
+    }
+  ]
+}
+
+--------------------------
+1.3 IAM User Management
+
+Creating IAM Users
+Understanding User Permissions and Groups
+Best Practices for User Creation and Management
+Example/Demo:
+
+Demo: Create multiple IAM users and assign them to groups.
+Example: Assign a user to an admin group and show the permissions.
+----------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # The AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_names" {
+  description = "List of IAM user names to be created"
+  type        = list(string)
+  default     = ["adminUser1", "adminUser2"]  # Example list of IAM users to create
+}
+
+variable "group_name" {
+  description = "The IAM group to assign users to"
+  type        = string
+  default     = "admin"  # Default Admin group name
+}
+
+variable "managed_policy_arn" {
+  description = "The ARN of the managed IAM policy to attach"
+  type        = string
+  default     = "arn:aws:iam::aws:policy/AdministratorAccess"  # Admin managed policy for full access
+}
+
+# 3. Create an IAM Group (Admin Group)
+resource "aws_iam_group" "admin_group" {
+  name = var.group_name  # Create an admin group
+}
+
+# 4. Loop to Create Multiple IAM Users from Input List
+resource "aws_iam_user" "users" {
+  count = length(var.user_names)  # Loop through the list of users
+
+  name = var.user_names[count.index]  # Assign each user name from the list
+}
+
+# 5. Attach Users to the IAM Admin Group
+resource "aws_iam_group_membership" "group_membership" {
+  count = length(var.user_names)  # Loop through users to assign them to the group
+
+  group = aws_iam_group.admin_group.name  # Attach users to the admin group
+  users = [aws_iam_user.users[count.index].name]  # Assign the current user to the group
+}
+
+# 6. Attach Managed Policy to the Admin Group (Full Admin Permissions)
+resource "aws_iam_policy_attachment" "group_policy_attachment" {
+  name       = "${var.group_name}-admin-policy-attachment"
+  policy_arn = var.managed_policy_arn  # Attach AdministratorAccess policy
+  groups     = [aws_iam_group.admin_group.name]
+}
+
+# 7. Output the Permissions for the Admin Group
+output "admin_group_permissions" {
+  value = "The permissions attached to the Admin group are: ${aws_iam_policy_attachment.group_policy_attachment.policy_arn}"
+}
+
+# 8. Output IAM Users Created
+output "created_users" {
+  value = aws_iam_user.users[*].name  # Output the names of all created IAM users
+}
+
+----------------------
+1.4 IAM Groups and Policies
+
+Creating IAM Groups
+Assigning Users to Groups
+Managing Permissions with Policies
+Default Policies in AWS IAM
+Example/Demo:
+
+Demo: Create a group (e.g., developers) and assign a user to the group. Attach a policy (e.g., AmazonS3ReadOnlyAccess) to the group.
+
+-------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_name" {
+  description = "IAM user name to be created"
+  type        = string
+  default     = "developerUser"  # Example IAM user name
+}
+
+variable "group_name" {
+  description = "IAM group name to assign users to"
+  type        = string
+  default     = "developers"  # Example developers group
+}
+
+variable "managed_policy_arn" {
+  description = "The ARN of the managed IAM policy to attach"
+  type        = string
+  default     = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"  # S3 Read-Only Access Policy
+}
+
+# 3. Create the IAM Group (e.g., developers)
+resource "aws_iam_group" "developers_group" {
+  name = var.group_name  # Create the developers group
+}
+
+# 4. Create the IAM User
+resource "aws_iam_user" "user" {
+  name = var.user_name  # Create the user based on the input variable
+}
+
+# 5. Add the User to the Developers Group
+resource "aws_iam_group_membership" "group_membership" {
+  group = aws_iam_group.developers_group.name  # Attach the user to the developers group
+  users = [aws_iam_user.user.name]  # Add the created user to the group
+}
+
+# 6. Attach the AmazonS3ReadOnlyAccess Policy to the Developers Group
+resource "aws_iam_policy_attachment" "group_policy_attachment" {
+  name       = "${var.group_name}-S3Policy-attachment"
+  policy_arn = var.managed_policy_arn  # Attach AmazonS3ReadOnlyAccess policy
+  groups     = [aws_iam_group.developers_group.name]  # Attach policy to the group
+}
+
+# 7. Output the IAM User and Group Information
+output "user_name" {
+  value = aws_iam_user.user.name  # Output the IAM user name
+}
+
+output "group_name" {
+  value = aws_iam_group.developers_group.name  # Output the IAM group name
+}
+
+output "policy_arn" {
+  value = aws_iam_policy_attachment.group_policy_attachment.policy_arn  # Output the policy ARN attached to the group
+}
+
+-------------------------
+Module 2: AWS IAM Policies and Permissions
+2.1 Understanding IAM Policies
+
+What are IAM Policies?
+Policy Structure: JSON format
+Key elements of a Policy: Version, Statement, Action, Resource, Condition
+Types of Policies: AWS Managed, Customer Managed, Inline Policies
+Example/Demo:
+
+Demo: Create a custom policy using JSON (e.g., a policy to allow only EC2 DescribeInstances actions).
+Example: Attach the custom policy to a user or group.
+-----------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_name" {
+  description = "IAM user name to be created"
+  type        = string
+  default     = "ec2DescribeUser"  # Example IAM user name
+}
+
+variable "policy_name" {
+  description = "Custom IAM policy name"
+  type        = string
+  default     = "EC2DescribeInstancesPolicy"  # Custom policy name
+}
+
+# 3. Create the IAM User
+resource "aws_iam_user" "user" {
+  name = var.user_name  # Create the user with the specified user name
+}
+
+# 4. Define the Custom IAM Policy (JSON format)
+resource "aws_iam_policy" "custom_policy" {
+  name        = var.policy_name
+  description = "Custom policy to allow EC2 DescribeInstances action only"
+
+  # JSON policy document defining permissions for DescribeInstances action
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action   = "ec2:DescribeInstances"
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# 5. Attach the Custom Policy to the User
+resource "aws_iam_policy_attachment" "user_policy_attachment" {
+  name       = "${var.user_name}-policy-attachment"
+  policy_arn = aws_iam_policy.custom_policy.arn  # Attach the custom policy
+  users      = [aws_iam_user.user.name]  # Attach the policy to the specified user
+}
+
+# 6. Output the IAM User and Policy Information
+output "user_name" {
+  value = aws_iam_user.user.name  # Output the IAM user name
+}
+
+output "policy_name" {
+  value = aws_iam_policy.custom_policy.name  # Output the custom policy name
+}
+
+output "policy_arn" {
+  value = aws_iam_policy.custom_policy.arn  # Output the ARN of the custom policy
+}
+
+
+----------------------------
+2.2 Policy Types
+
+Managed Policies: AWS Managed and Customer Managed
+Inline Policies: Pros and Cons
+Creating Custom IAM Policies
+Example/Demo:
+
+Demo: Attach an AWS-managed policy (e.g., AdministratorAccess) to a user.
+Demo: Create and assign an inline policy that grants access only to specific S3 buckets.
+2.3 Policy Simulation and Best Practices
+
+Using IAM Policy Simulator
+Granting Least Privilege Access
+Policy Evaluation Logic
+Example/Demo:
+
+Demo: Use the IAM Policy Simulator to test a policy that grants EC2 instance start/stop permissions.
+Example: Apply the least privilege principle by creating a policy with minimal permissions and testing access.
+-----------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_name" {
+  description = "IAM user name to be created"
+  type        = string
+  default     = "ec2ControlUser"  # Example IAM user name
+}
+
+variable "policy_name" {
+  description = "Custom IAM policy name"
+  type        = string
+  default     = "EC2StartStopPolicy"  # Custom policy name
+}
+
+# 3. Create the IAM User
+resource "aws_iam_user" "user" {
+  name = var.user_name  # Create the user with the specified user name
+}
+
+# 4. Define the Custom IAM Policy (JSON format for EC2 start/stop)
+resource "aws_iam_policy" "custom_policy" {
+  name        = var.policy_name
+  description = "Custom policy to allow EC2 Start/Stop actions only"
+
+  # JSON policy document for EC2 start/stop permissions
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action   = [
+          "ec2:StartInstances",
+          "ec2:StopInstances"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# 5. Attach the Custom Policy to the User
+resource "aws_iam_policy_attachment" "user_policy_attachment" {
+  name       = "${var.user_name}-policy-attachment"
+  policy_arn = aws_iam_policy.custom_policy.arn  # Attach the custom policy
+  users      = [aws_iam_user.user.name]  # Attach the policy to the specified user
+}
+
+# 6. Output the IAM User and Policy Information
+output "user_name" {
+  value = aws_iam_user.user.name  # Output the IAM user name
+}
+
+output "policy_name" {
+  value = aws_iam_policy.custom_policy.name  # Output the custom policy name
+}
+
+output "policy_arn" {
+  value = aws_iam_policy.custom_policy.arn  # Output the ARN of the custom policy
+}
+
+-------------------------
+2.4 Working with IAM Roles
+
+Introduction to IAM Roles
+When and Why to Use Roles
+Creating and Assigning IAM Roles
+Trust Policies and Role Assumption
+Example/Demo:
+
+Demo: Create an IAM role for an EC2 instance to allow access to an S3 bucket.
+Example: Assume a role using the sts:assumeRole API.
+-------------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "role_name" {
+  description = "IAM role name for EC2 instance"
+  type        = string
+  default     = "EC2S3AccessRole"  # Custom role name
+}
+
+variable "bucket_name" {
+  description = "S3 bucket name to be accessed"
+  type        = string
+  default     = "my-example-bucket"  # Replace with your bucket name
+}
+
+# 3. Create an IAM Role for EC2 with the trust relationship to allow EC2 instances to assume this role
+resource "aws_iam_role" "ec2_role" {
+  name               = var.role_name
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"  # EC2 can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# 4. Attach the S3 read-write policy to the IAM role to allow access to S3 bucket
+resource "aws_iam_policy" "s3_access_policy" {
+  name        = "S3BucketAccessPolicy"
+  description = "Policy to allow EC2 instance access to S3 bucket"
+
+  # Define the policy to grant EC2 access to the S3 bucket
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action   = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          "arn:aws:s3:::${var.bucket_name}",
+          "arn:aws:s3:::${var.bucket_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# 5. Attach the policy to the IAM role
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  policy_arn = aws_iam_policy.s3_access_policy.arn
+  role       = aws_iam_role.ec2_role.name
+}
+
+# 6. Create an EC2 instance to associate the IAM role with
+resource "aws_instance" "ec2_instance" {
+  ami           = "ami-0c55b159cbfafe1f0"  # Example AMI (replace with a valid AMI ID)
+  instance_type = "t2.micro"
+
+  iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
+
+  tags = {
+    Name = "EC2WithS3Access"
+  }
+}
+
+# 7. Create an Instance Profile for EC2 to use the IAM Role
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "EC2InstanceProfile"
+  role = aws_iam_role.ec2_role.name  # Link the IAM role to the instance profile
+}
+
+# 8. Output the IAM Role and Instance Information
+output "role_name" {
+  value = aws_iam_role.ec2_role.name  # Output the IAM role name
+}
+
+output "instance_id" {
+  value = aws_instance.ec2_instance.id  # Output the EC2 instance ID
+}
+
+output "bucket_name" {
+  value = var.bucket_name  # Output the S3 bucket name
+}
+
+--------------------------------
+Module 3: IAM Best Practices and Security
+3.1 Best Practices for Managing IAM Users and Groups
+
+Avoiding Root User Usage
+Implementing Strong Password Policies
+Using Multi-Factor Authentication (MFA)
+Periodic Credential Rotation
+Example/Demo:
+
+Demo: Set up MFA for an IAM user.
+Example: Enforce a strong password policy and test password policy enforcement.
+-------------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region will be passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "user_name" {
+  description = "IAM user name to be created"
+  type        = string
+  default     = "exampleIAMUser"  # Example IAM user name
+}
+
+# 3. Create the IAM User
+resource "aws_iam_user" "user" {
+  name = var.user_name  # Create the user with the specified user name
+}
+
+# 4. Enable MFA for the IAM User
+resource "aws_iam_virtual_mfa_device" "mfa_device" {
+  user_name = aws_iam_user.user.name
+  virtual_mfa_device_name = "${var.user_name}-mfa-device"  # MFA device name
+}
+
+# 5. Create the Strong Password Policy
+resource "aws_iam_account_password_policy" "strong_password_policy" {
+  minimum_password_length    = 14
+  require_symbols            = true
+  require_numbers            = true
+  require_uppercase_chars    = true
+  require_lowercase_chars    = true
+  allow_users_to_change_password = true
+  max_password_age           = 90
+  password_reuse_prevention  = 5
+  hard_expiry                = true
+}
+
+# 6. Attach the MFA Device to the IAM User (simulating MFA enablement)
+resource "aws_iam_user_mfa_device" "user_mfa_device" {
+  user_name    = aws_iam_user.user.name
+  serial_number = aws_iam_virtual_mfa_device.mfa_device.serial_number
+  authentication_code_1 = "123456"  # Temporary code - Replace with real code
+  authentication_code_2 = "654321"  # Temporary code - Replace with real code
+}
+
+# 7. Test User Creation with Enforced Password Policy
+resource "aws_iam_user" "test_user" {
+  name = "testuser"
+  # Setting a weak password to test password policy enforcement
+  password = "weakpassword"  # This will fail due to the password policy
+  force_destroy = true  # Force destroy for testing purpose
+}
+
+# 8. Output the IAM User and MFA Device Information
+output "user_name" {
+  value = aws_iam_user.user.name  # Output the IAM user name
+}
+
+output "mfa_device_name" {
+  value = aws_iam_virtual_mfa_device.mfa_device.virtual_mfa_device_name  # Output the MFA device name
+}
+
+output "password_policy" {
+  value = aws_iam_account_password_policy.strong_password_policy  # Output the password policy settings
+}
+
+--------------------------------
+3.2 Advanced Authentication and Authorization
+
+Setting up MFA for IAM Users
+Enforcing MFA on Sensitive Operations
+Using AWS Directory Service and Federation for SSO
+External Identity Providers: SAML, OIDC, Active Directory
+Example/Demo:
+
+Demo: Set up a federated user login with an external identity provider (e.g., using Active Directory or Google as the IdP).
+-------------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "google_client_id" {
+  description = "Google OAuth2 client ID for federated authentication"
+  type        = string
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth2 client secret for federated authentication"
+  type        = string
+}
+
+# 3. Create a Cognito User Pool (optional, if you want to manage user profiles)
+resource "aws_cognito_user_pool" "user_pool" {
+  name = "MyUserPool"  # Name of the user pool
+}
+
+# 4. Create a Cognito Identity Pool to allow federated login
+resource "aws_cognito_identity_pool" "identity_pool" {
+  identity_pool_name               = "MyFederatedIdentityPool"
+  allow_unauthenticated_identities = true  # Allow unauthenticated users (for guest access)
+}
+
+# 5. Set up Google as the Identity Provider (IdP) in Cognito
+resource "aws_cognito_identity_provider" "google_idp" {
+  provider_name = "Google"
+  provider_type = "Google"
+  user_pool_id  = aws_cognito_user_pool.user_pool.id  # Use the User Pool ID (optional)
+
+  provider_details = {
+    client_id     = var.google_client_id       # Your Google OAuth client ID
+    client_secret = var.google_client_secret   # Your Google OAuth client secret
+  }
+
+  attribute_mapping = {
+    email   = "email"     # Map email from Google IdP to the Cognito attribute
+    username = "sub"      # Map Google `sub` to Cognito `username`
+  }
+}
+
+# 6. Create an IAM Role for Federated Users (Google users in this case)
+resource "aws_iam_role" "google_federated_role" {
+  name = "GoogleFederatedUserRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRoleWithWebIdentity"
+        Effect    = "Allow"
+        Principal = {
+          Federated = "cognito-identity.amazonaws.com"
+        }
+        Condition = {
+          StringEquals = {
+            "cognito-identity.amazonaws.com:aud" = aws_cognito_identity_pool.identity_pool.id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# 7. Attach Permissions to the IAM Role (e.g., S3 access)
+resource "aws_iam_policy" "s3_access_policy" {
+  name        = "S3AccessPolicy"
+  description = "Allow access to S3 for federated users"
+
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action   = "s3:ListBucket"
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::my-example-bucket"
+      },
+      {
+        Action   = "s3:GetObject"
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::my-example-bucket/*"
+      }
+    ]
+  })
+}
+
+# 8. Attach the Policy to the Federated Role
+resource "aws_iam_role_policy_attachment" "google_federated_role_policy" {
+  role       = aws_iam_role.google_federated_role.name
+  policy_arn = aws_iam_policy.s3_access_policy.arn
+}
+
+# 9. Output the Identity Pool and Role Information
+output "identity_pool_id" {
+  value = aws_cognito_identity_pool.identity_pool.id  # Output Identity Pool ID
+}
+
+output "google_federated_role_arn" {
+  value = aws_iam_role.google_federated_role.arn  # Output IAM role ARN for federated users
+}
+
+--------------------------------
+3.3 IAM Access Analyzer
+
+Introduction to IAM Access Analyzer
+Setting up and Analyzing IAM Roles and Policies
+Using Access Analyzer to Identify Permissions Issues
+Example/Demo:
+
+Demo: Use IAM Access Analyzer to check for unused permissions and analyze an IAM role's permissions.
+-------------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "role_name" {
+  description = "IAM Role name to be created"
+  type        = string
+  default     = "ExampleIAMRole"
+}
+
+# 3. Create an IAM Role to Analyze
+resource "aws_iam_role" "role" {
+  name               = var.role_name  # IAM Role name
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"  # Example of assuming role for EC2 instances
+        }
+      }
+    ]
+  })
+}
+
+# 4. Attach a Managed Policy to the Role (e.g., AmazonS3ReadOnlyAccess)
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  role       = aws_iam_role.role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"  # Attach S3 read-only access
+}
+
+# 5. Enable IAM Access Analyzer for the account
+resource "aws_iam_access_analyzer" "access_analyzer" {
+  analyzer_name = "example-access-analyzer"  # Name of the analyzer
+  type          = "ACCOUNT"  # Analyzing permissions within the account
+}
+
+# 6. Create a policy that is unused (for testing purposes)
+resource "aws_iam_policy" "unused_policy" {
+  name        = "UnusedPolicy"
+  description = "A policy with unused permissions for demonstration"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "s3:ListBucket"
+        Effect    = "Allow"
+        Resource = "arn:aws:s3:::example-bucket"
+      }
+    ]
+  })
+}
+
+# 7. Attach the unused policy to the IAM Role (for testing purposes)
+resource "aws_iam_role_policy_attachment" "role_unused_policy_attachment" {
+  role       = aws_iam_role.role.name
+  policy_arn = aws_iam_policy.unused_policy.arn  # Attach unused policy
+}
+
+# 8. Output IAM Role and Analyzer Information
+output "role_name" {
+  value = aws_iam_role.role.name  # Output IAM role name
+}
+
+output "access_analyzer_name" {
+  value = aws_iam_access_analyzer.access_analyzer.analyzer_name  # Output the analyzer name
+}
+
+output "unused_policy_arn" {
+  value = aws_iam_policy.unused_policy.arn  # Output the unused policy ARN for reference
+}
+
+
+--------------------------------
+3.4 Security Considerations in IAM
+
+Least Privilege Principle
+Access Control Lists (ACLs) vs. IAM Policies
+Using Resource-Based Policies vs. Identity-Based Policies
+Example/Demo:
+
+Demo: Configure a resource-based policy (e.g., S3 bucket policy) that grants access only to a specific IAM user.
+
+-------------------------------
+# 1. Define the AWS Provider Configuration
+provider "aws" {
+  region = var.aws_region  # AWS region passed as a variable
+}
+
+# 2. Define Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+variable "iam_user_name" {
+  description = "The IAM User name"
+  type        = string
+  default     = "example-iam-user"
+}
+
+variable "bucket_name" {
+  description = "The name of the S3 bucket"
+  type        = string
+  default     = "example-iam-bucket-12345"  # Ensure this bucket name is globally unique
+}
+
+# 3. Create an IAM User
+resource "aws_iam_user" "iam_user" {
+  name = var.iam_user_name  # IAM User name passed as a variable
+}
+
+# 4. Create an S3 Bucket
+resource "aws_s3_bucket" "s3_bucket" {
+  bucket = var.bucket_name  # Bucket name passed as a variable
+  acl    = "private"  # Make the bucket private by default
+}
+
+# 5. Create a Bucket Policy that Grants Access to the Specific IAM User
+resource "aws_s3_bucket_object" "example_object" {
+  bucket = aws_s3_bucket.s3_bucket.bucket  # Reference the S3 bucket created
+  key    = "example-file.txt"  # Object key name in the S3 bucket
+  content = "This is an example file for testing purposes."
+}
+
+resource "aws_s3_bucket_policy" "bucket_policy" {
+  bucket = aws_s3_bucket.s3_bucket.bucket  # Reference the S3 bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "s3:GetObject"  # Allow getting objects (read access)
+        Effect    = "Allow"
+        Resource  = "${aws_s3_bucket.s3_bucket.arn}/*"  # Apply policy to all objects in the bucket
+        Principal = {
+          AWS = aws_iam_user.iam_user.arn  # Grant permission to the specific IAM user
+        }
+      }
+    ]
+  })
+}
+
+# 6. Output the IAM User ARN and S3 Bucket ARN for reference
+output "iam_user_arn" {
+  value = aws_iam_user.iam_user.arn  # Output the IAM user's ARN
+}
+
+output "s3_bucket_arn" {
+  value = aws_s3_bucket.s3_bucket.arn  # Output the S3 bucket ARN
+}
+
+output "bucket_policy" {
+  value = aws_s3_bucket_policy.bucket_policy.policy  # Output the S3 bucket policy
+}
+
+--------------------------------
+Module 4: Advanced IAM Concepts and Use Cases
+4.1 Cross-Account Access with IAM
+
+Sharing Resources Across Accounts
+Using IAM Roles for Cross-Account Access
+Configuring Trust Policies for Cross-Account Roles
+Best Practices for Cross-Account Access
+Example/Demo:
+
+Demo: Set up cross-account access to an S3 bucket by creating a role in the source account and assuming that role in the target account.
+-------------------------------
+To demonstrate **cross-account access to an S3 bucket**, we'll walk through the following steps:
+
+1. **Set up the Source Account** (Account A):
+   - Create an IAM role that allows cross-account access to the S3 bucket.
+   - Attach the role to a policy that allows accessing the S3 bucket in the target account.
+
+2. **Set up the Target Account** (Account B):
+   - Create an S3 bucket and configure the resource-based policy to allow the role from Account A to access the bucket.
+
+3. **Assume the Role** from the source account to access the S3 bucket in the target account.
+
+### **Terraform Code for Cross-Account Access to an S3 Bucket**
+
+#### **Step 1: Set up the Source Account (Account A)**
+
+In the source account, we will:
+- Create an IAM role that grants permissions to assume the role in the target account.
+- Attach the appropriate permissions to the role to allow access to the S3 bucket in the target account.
+
+```hcl
+# Provider for Source Account (Account A)
+provider "aws" {
+  region = var.aws_region
+  alias  = "source_account"
+}
+
+# Input Variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "target_account_id" {
+  description = "The Target Account ID for Cross Account Access"
+  type        = string
+}
+
+variable "role_name" {
+  description = "The IAM role name in the source account"
+  type        = string
+  default     = "SourceAccountRole"
+}
+
+# Create an IAM role in the source account to assume the role in the target account
+resource "aws_iam_role" "source_account_role" {
+  provider = aws.source_account
+  name     = var.role_name
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.target_account_id}:role/TargetAccountRole" # Assume role in target account
+        }
+      }
+    ]
+  })
+}
+
+# Attach a policy that grants access to S3 (for demo purposes, you can customize this)
+resource "aws_iam_policy" "source_account_s3_access" {
+  provider = aws.source_account
+  name     = "SourceAccountS3Access"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = "s3:*"  # Allow all S3 actions
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach the policy to the role in the source account
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  provider = aws.source_account
+  role      = aws_iam_role.source_account_role.name
+  policy_arn = aws_iam_policy.source_account_s3_access.arn
+}
+```
+
+#### **Step 2: Set up the Target Account (Account B)**
+
+In the target account, we will:
+- Create an S3 bucket.
+- Configure a bucket policy to allow the IAM role from the source account to access the bucket.
+
+```hcl
+# Provider for Target Account (Account B)
+provider "aws" {
+  region = var.aws_region
+  alias  = "target_account"
+}
+
+# Input Variables
+variable "source_account_role_arn" {
+  description = "The ARN of the IAM role from the source account to assume"
+  type        = string
+}
+
+variable "bucket_name" {
+  description = "The name of the S3 bucket in the target account"
+  type        = string
+  default     = "target-account-bucket-12345"  # Change this to a globally unique bucket name
+}
+
+# Create the S3 bucket in the target account
+resource "aws_s3_bucket" "target_s3_bucket" {
+  provider = aws.target_account
+  bucket   = var.bucket_name
+  acl      = "private"
+}
+
+# Create a Bucket Policy to allow cross-account access
+resource "aws_s3_bucket_policy" "bucket_policy" {
+  provider = aws.target_account
+  bucket   = aws_s3_bucket.target_s3_bucket.bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "s3:GetObject"  # Allow read access (you can modify for other permissions)
+        Effect    = "Allow"
+        Resource  = "${aws_s3_bucket.target_s3_bucket.arn}/*"
+        Principal = {
+          AWS = var.source_account_role_arn  # Allow the source account role to access this bucket
+        }
+      }
+    ]
+  })
+}
+```
+
+#### **Step 3: Assume the Role and Access the S3 Bucket**
+
+In the source account (Account A), you can **assume the role** using the **STS AssumeRole API** to access the S3 bucket in the target account (Account B).
+
+You can simulate this action using **AWS CLI** or **Terraform’s `aws_iam_role` resource** to assume the role programmatically.
+
+**AssumeRole using AWS CLI:**
+```bash
+aws sts assume-role \
+  --role-arn arn:aws:iam::TARGET_ACCOUNT_ID:role/TargetAccountRole \
+  --role-session-name "SourceAccountSession" \
+  --profile "source-account-profile"
+```
+
+Once you assume the role, you'll receive temporary credentials that you can use to access the S3 bucket.
+
+### **Steps to Run the Terraform Code:**
+
+1. **Set up two AWS Profiles** for the **Source Account** and **Target Account**:
+   - Ensure you have credentials for both accounts set up in your `~/.aws/credentials` file or via environment variables.
+
+2. **Initialize the Terraform working directory:**
+
+   ```bash
+   terraform init
+   ```
+
+3. **Apply the Terraform configuration:**
+
+   ```bash
+   terraform apply
+   ```
+
+   Terraform will ask for confirmation. Type `yes` to apply the configuration and create the resources in both accounts.
+
+4. **Test Cross-Account Access (via AWS CLI or SDK):**
+
+   After applying the configuration, the IAM role in the source account (`SourceAccountRole`) will have permissions to access the S3 bucket in the target account (`target-account-bucket-12345`). To verify:
+
+   - First, assume the role from the source account:
+     ```bash
+     aws sts assume-role --role-arn arn:aws:iam::TARGET_ACCOUNT_ID:role/TargetAccountRole --role-session-name "TestSession"
+     ```
+
+   - Use the temporary credentials received from the `assume-role` API call to access the S3 bucket:
+     ```bash
+     aws s3 ls s3://target-account-bucket-12345/ --profile "temporary-profile"
+     ```
+
+   - The IAM role from the source account will have access to list the contents of the S3 bucket in the target account.
+
+5. **Clean up the Resources:**
+
+   To destroy the resources created by Terraform, run:
+
+   ```bash
+   terraform destroy
+   ```
+
+   Confirm by typing `yes` when prompted.
+
+### **Summary:**
+
+This demo demonstrates **cross-account access to an S3 bucket** between two AWS accounts by creating:
+
+1. An **IAM role** in the **source account** (Account A) with permissions to assume a role in the **target account**.
+2. An **S3 bucket** in the **target account** (Account B) with a **bucket policy** allowing access to the source account’s role.
+3. **Assuming the role** from the source account to access the S3 bucket in the target account.
+
+By using **IAM roles** and **resource-based policies** (S3 bucket policy), we have set up secure and controlled cross-account access to the resources.
+--------------------------------
+4.2 Federation and Single Sign-On (SSO)
+
+Overview of Identity Federation
+Integrating AWS with Third-Party Identity Providers (Active Directory, Okta, etc.)
+Setting up SSO with AWS and Azure AD
+Using SAML 2.0 for Web Application Authentication
+Example/Demo:
+
+Demo: Set up SSO with a corporate identity provider using SAML 2.0.
+-------------------------------
+To set up **SSO (Single Sign-On)** with a **corporate identity provider (IdP)** using **SAML 2.0** in AWS, we’ll integrate AWS IAM Identity Center (AWS SSO) with your corporate IdP.
+
+Here is an outline of the process:
+
+1. **Configure the Identity Provider (IdP)**: This is typically your corporate identity provider, such as **Active Directory Federation Services (ADFS)**, **Okta**, or **Azure AD**. This IdP will send SAML assertions to AWS to authenticate users.
+   
+2. **Set up AWS SSO with SAML 2.0**: Create an identity provider (IdP) in AWS and configure the trust relationship between AWS and the IdP.
+
+3. **Assign Users and Permissions**: Define which AWS resources users from the IdP can access via AWS SSO.
+
+### Steps:
+
+1. **Configure Your Corporate Identity Provider** (e.g., ADFS, Okta, Azure AD)
+2. **Create and Configure AWS SSO** to use SAML 2.0
+3. **Test the SSO Integration**
+
+Below is a Terraform-based solution that demonstrates how to configure AWS IAM Identity Center (AWS SSO) to work with an identity provider using **SAML 2.0**.
+
+---
+
+### **Terraform Code for AWS SSO with a SAML 2.0 Identity Provider**
+
+#### **Step 1: Create an Identity Provider (IdP) in AWS**
+
+We'll use the `aws_iam_saml_provider` resource to configure AWS with your corporate IdP, which will send SAML assertions.
+
+```hcl
+# Provider for AWS (Your AWS account)
+provider "aws" {
+  region = var.aws_region  # AWS region passed as a variable
+}
+
+# Input variables
+variable "aws_region" {
+  description = "The AWS region to deploy the resources in"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "saml_metadata_url" {
+  description = "The SAML metadata URL from the IdP (e.g., Okta, Azure AD)"
+  type        = string
+}
+
+# Create an IAM SAML provider
+resource "aws_iam_saml_provider" "saml_provider" {
+  name                     = "corporate-idp"  # The name for the IAM SAML provider
+  saml_metadata_document    = data.http.saml_metadata.body  # SAML metadata document (fetched from URL)
+}
+
+# Fetch the SAML metadata document from the IdP
+data "http" "saml_metadata" {
+  url = var.saml_metadata_url  # The metadata URL from the IdP (Okta, Azure AD, etc.)
+}
+```
+
+#### **Step 2: Create an IAM Role with SAML Trust Policy**
+
+In this step, we define an IAM role that grants permissions to users authenticated via the corporate IdP. The trust policy allows AWS to trust the SAML assertions sent by the IdP.
+
+```hcl
+# IAM Role that assumes the role based on SAML assertion from the IdP
+resource "aws_iam_role" "sso_role" {
+  name = "SamlSSORole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRoleWithSAML"
+        Effect    = "Allow"
+        Principal = {
+          Federated = aws_iam_saml_provider.saml_provider.arn  # SAML provider ARN
+        }
+        Condition = {
+          StringEquals = {
+            "SAML:aud" = "https://signin.aws.amazon.com/saml"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Attach policies to the IAM role
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  role       = aws_iam_role.sso_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"  # Example policy, use the appropriate policy for your organization
+}
+```
+
+#### **Step 3: Create a SAML-based Federation in AWS SSO**
+
+Here, we will integrate the IAM role and SAML provider with AWS SSO to allow users from the IdP to access AWS.
+
+```hcl
+resource "aws_sso_admin" "sso_admin" {
+  instance_arn = var.sso_instance_arn  # AWS SSO instance ARN
+
+  username     = "admin_user"
+  first_name   = "Admin"
+  last_name    = "User"
+  email        = "admin_user@company.com"
+  groups       = ["Administrators"]  # Example group
+}
+
+resource "aws_sso_permission_set" "admin_permission_set" {
+  instance_arn = var.sso_instance_arn
+  name         = "AdminPermissionSet"
+  description  = "Administrator access to AWS resources"
+
+  # Define permissions within the permission set
+  managed_policies = [
+    "arn:aws:iam::aws:policy/AdministratorAccess"
+  ]
+}
+```
+
+#### **Step 4: Assign Users and Permissions**
+
+You can assign your users from your identity provider to roles and permission sets within AWS SSO, ensuring they have access to the AWS resources.
+
+```hcl
+resource "aws_sso_assignment" "sso_user_assignment" {
+  instance_arn      = var.sso_instance_arn
+  principal_id      = "user-12345"  # This is the user ID from your IdP
+  principal_type    = "USER"
+  permission_set_arn = aws_sso_permission_set.admin_permission_set.arn
+  target_id         = var.aws_account_id  # The target AWS account for access
+  target_type       = "AWS_ACCOUNT"
+}
+```
+
+#### **Step 5: Configure AWS CLI or SDK for SSO Access**
+
+Once the setup is complete, users can use **AWS CLI** or **AWS SDKs** to authenticate with AWS using the SSO integration.
+
+To authenticate using **AWS CLI**, use the `aws sso login` command. You will need to configure your profile with the necessary SSO details.
+
+```bash
+aws configure sso
+```
+
+This will prompt you for the following details:
+1. SSO start URL (e.g., https://d-12345678.awsapps.com/start)
+2. SSO region
+3. The AWS account and permission set you wish to access
+
+Once configured, you can log in to AWS using the CLI:
+
+```bash
+aws sso login --profile my-sso-profile
+```
+
+---
+
+### **Test the SSO Integration:**
+
+1. **Login to AWS via SSO**: After configuring AWS SSO with your corporate IdP, you can now use SSO to log into the AWS Management Console.
+
+2. **Assign Users to Permission Sets**: Ensure the users from your corporate IdP are assigned to appropriate roles and permission sets within AWS SSO. This controls what resources they can access in AWS.
+
+3. **Verify Access**: Once logged in via SSO, users should have access to the permissions defined in their permission sets. For instance, if they are assigned the "AdministratorAccess" policy, they will have full administrative privileges in the AWS Console.
+
+---
+
+### **Summary:**
+
+This demo walks you through the steps to set up **SSO with a corporate identity provider (IdP)** using **SAML 2.0** and **AWS IAM Identity Center** (AWS SSO). The integration allows users from your corporate IdP (like **Active Directory**, **Okta**, or **Azure AD**) to authenticate and gain access to AWS resources without the need for additional credentials.
+
+Key points:
+- We configured a **SAML provider** to trust the corporate IdP.
+- Created an **IAM role** with a trust relationship to the SAML provider.
+- Integrated the role into **AWS SSO** for user assignments and access control.
+
+--------------------------------
+4.3 Resource-Based Policies
+
+Understanding Resource-Based Policies
+Example: S3 Bucket Policies, Lambda Function Policies, etc.
+Applying Resource-Based Policies to Control Access
+Example/Demo:
+
+Demo: Create and attach an S3 bucket policy to allow only certain IAM users to upload objects.
+-------------------------------
+To demonstrate how to **create and attach an S3 bucket policy** that **allows only certain IAM users** to upload objects, we will perform the following steps:
+
+1. **Create an S3 bucket**.
+2. **Create IAM users** (the ones who are allowed to upload objects).
+3. **Create a bucket policy** that grants **upload permissions** only to those specific IAM users.
+4. **Attach the bucket policy** to the S3 bucket.
+
+### Terraform Code for S3 Bucket Policy Allowing Specific IAM Users to Upload Objects
+
+#### **Step 1: Create an S3 Bucket**
+
+```hcl
+# Provider for AWS
+provider "aws" {
+  region = "us-east-1"  # AWS region
+}
+
+# Input variable for the bucket name
+variable "bucket_name" {
+  description = "The name of the S3 bucket"
+  type        = string
+  default     = "my-demo-bucket-12345"  # Choose a unique name for your bucket
+}
+
+# Create the S3 bucket
+resource "aws_s3_bucket" "my_bucket" {
+  bucket = var.bucket_name
+  acl    = "private"  # Set bucket to private by default
+}
+```
+
+#### **Step 2: Create IAM Users**
+
+Next, let's create a couple of IAM users who will be allowed to upload objects to the S3 bucket.
+
+```hcl
+# Create IAM User 1
+resource "aws_iam_user" "user1" {
+  name = "user1"
+}
+
+# Create IAM User 2
+resource "aws_iam_user" "user2" {
+  name = "user2"
+}
+
+# IAM User 3 (this user will NOT have upload permission)
+resource "aws_iam_user" "user3" {
+  name = "user3"
+}
+```
+
+#### **Step 3: Create a Bucket Policy to Allow Only Certain IAM Users to Upload Objects**
+
+In this step, we will create a policy that allows only specific IAM users (user1 and user2 in this case) to **upload objects** (s3:PutObject) to the S3 bucket.
+
+```hcl
+# Create S3 bucket policy to allow only user1 and user2 to upload objects
+resource "aws_s3_bucket_policy" "my_bucket_policy" {
+  bucket = aws_s3_bucket.my_bucket.bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = "s3:PutObject"  # Allow only the PutObject action
+        Effect   = "Allow"
+        Resource = "${aws_s3_bucket.my_bucket.arn}/*"  # Apply to all objects in the bucket
+        Principal = {
+          AWS = [
+            aws_iam_user.user1.arn,
+            aws_iam_user.user2.arn  # Only user1 and user2 are allowed
+          ]
+        }
+      },
+      {
+        Action   = "s3:GetObject"  # Allow read access for everyone (you can change this if needed)
+        Effect   = "Allow"
+        Resource = "${aws_s3_bucket.my_bucket.arn}/*"
+        Principal = "*"
+      }
+    ]
+  })
+}
+```
+
+#### **Step 4: Attach the Bucket Policy to the S3 Bucket**
+
+The `aws_s3_bucket_policy` resource automatically attaches the policy to the S3 bucket.
+
+#### **Step 5: Test the Permissions**
+
+Once this Terraform code is applied, users `user1` and `user2` will have permissions to upload objects to the S3 bucket, while `user3` will not be able to upload objects.
+
+You can verify the upload permissions using AWS CLI, as shown below:
+
+1. **For User1 and User2 (with permissions to upload):**
+
+   Log in as **user1** (or **user2**) via AWS CLI:
+
+   ```bash
+   aws s3 cp myfile.txt s3://my-demo-bucket-12345/ --profile user1  # User1 uploads the file
+   ```
+
+   **Expected Result**: The file should upload successfully.
+
+2. **For User3 (without permissions to upload):**
+
+   Log in as **user3** via AWS CLI:
+
+   ```bash
+   aws s3 cp myfile.txt s3://my-demo-bucket-12345/ --profile user3  # User3 tries to upload
+   ```
+
+   **Expected Result**: An **AccessDenied** error will occur, as user3 does not have permission to upload objects.
+
+---
+
+### **Summary:**
+
+In this demo:
+- We created an **S3 bucket**.
+- We created three **IAM users** (`user1`, `user2`, and `user3`).
+- We created a **bucket policy** to allow only `user1` and `user2` to upload objects (`s3:PutObject`), while everyone else can have read access (`s3:GetObject`).
+- We attached the policy to the S3 bucket.
+- We tested the permissions using AWS CLI, ensuring only the allowed users can upload objects.
+
+This setup helps enforce **fine-grained access control** on your S3 bucket, ensuring only specific IAM users can perform certain actions, such as uploading objects, while others may have read-only access or no access at all.
+--------------------------------
+4.4 AWS Organizations and Service Control Policies (SCPs)
+
+Introduction to AWS Organizations
+Organizing Accounts with AWS Organizations
+Using Service Control Policies (SCPs) for Centralized Management
+Applying Policies across Organizational Units (OUs)
+Example/Demo:
+
+Demo: Create an AWS Organization, add accounts, and apply a Service Control Policy (SCP) to limit certain actions across the organization.
+-------------------------------
+To demonstrate how to create an **AWS Organization**, add accounts, and apply a **Service Control Policy (SCP)** to limit certain actions across the organization, we'll use **Terraform**. 
+
+### **Steps:**
+1. **Create an AWS Organization**.
+2. **Create new AWS accounts** under the organization.
+3. **Create a Service Control Policy (SCP)** to limit certain actions across the organization.
+4. **Attach the SCP to organizational units or accounts**.
+
+---
+
+### **Step-by-Step Terraform Code:**
+
+#### **Step 1: Create an AWS Organization**
+
+We begin by setting up the organization using `aws_organizations_organization`.
+
+```hcl
+provider "aws" {
+  region = "us-east-1"  # AWS region
+}
+
+# Create AWS Organization
+resource "aws_organizations_organization" "my_organization" {
+  feature_set = "ALL"  # This enables all features, such as SCPs
+}
+```
+
+#### **Step 2: Create New AWS Accounts Under the Organization**
+
+Next, we will create two new AWS accounts as part of our organization.
+
+```hcl
+# Create Account 1
+resource "aws_organizations_account" "account1" {
+  name      = "Account1"
+  email     = "account1@example.com"
+  role_name = "OrganizationAccountAccessRole"
+}
+
+# Create Account 2
+resource "aws_organizations_account" "account2" {
+  name      = "Account2"
+  email     = "account2@example.com"
+  role_name = "OrganizationAccountAccessRole"
+}
+```
+
+In this case, both accounts are created with the role `OrganizationAccountAccessRole`, which grants the account permission to access the organization.
+
+#### **Step 3: Create a Service Control Policy (SCP)**
+
+Now, we will create an SCP that will limit certain actions. For this example, we will create an SCP that denies access to **EC2** actions (like `RunInstances`) across the organization.
+
+```hcl
+# Create Service Control Policy (SCP) to deny EC2 RunInstances action
+resource "aws_organizations_policy" "deny_ec2_run_instances" {
+  name        = "DenyEC2RunInstances"
+  description = "Policy to deny EC2 RunInstances action across the organization"
+
+  content = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Deny"
+        Action   = "ec2:RunInstances"
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
+
+This SCP will prevent the action `ec2:RunInstances` from being executed in any account under the organization.
+
+#### **Step 4: Attach the SCP to Organizational Units (OUs) or Accounts**
+
+Now, we attach the SCP to either the **root** of the organization or a specific **organizational unit (OU)**. Here, we'll attach it to the root of the organization, which will apply it to all accounts.
+
+```hcl
+# Attach SCP to the organization root
+resource "aws_organizations_policy_attachment" "attach_scp_to_root" {
+  policy_id = aws_organizations_policy.deny_ec2_run_instances.id
+  target_id = aws_organizations_organization.my_organization.id
+}
+```
+
+This will ensure that the SCP is applied to all accounts within the organization.
+
+#### **Step 5: Test the SCP**
+
+After deploying this Terraform code, the **SCP** will be in place, and the `ec2:RunInstances` action will be **denied** in both accounts.
+
+To test this, you can attempt to launch an EC2 instance from either **Account1** or **Account2** using the AWS Management Console, AWS CLI, or SDK.
+
+For example, using the AWS CLI, try to run an EC2 instance:
+
+```bash
+aws ec2 run-instances --image-id ami-12345678 --instance-type t2.micro --profile account1
+```
+
+**Expected Result**: The action should be denied, and you will see an error message similar to:
+
+```
+An error occurred (AccessDenied) when calling the RunInstances operation: User: arn:aws:iam::account-id:user/user1 is not authorized to perform: ec2:RunInstances on resource: arn:aws:ec2:region:account-id:instance/instance-id because no identity-based policy allows the ec2:RunInstances action
+```
+
+---
+
+### **Step 6: Clean Up**
+
+After the demo, make sure to clean up any resources created to avoid unwanted charges.
+
+```bash
+terraform destroy
+```
+
+---
+
+### **Summary:**
+
+This demo walks you through the process of:
+1. Creating an **AWS Organization** with multiple **accounts**.
+2. Applying a **Service Control Policy (SCP)** that restricts certain actions across the organization (in this case, preventing EC2 `RunInstances`).
+3. Testing the policy by attempting to run EC2 instances from the restricted accounts.
+
+This setup demonstrates how to use **AWS Organizations** and **Service Control Policies** to centrally manage and enforce security policies across multiple AWS accounts in your organization.
+--------------------------------
+4.5 Managing Permissions Boundaries
+
+Understanding Permissions Boundaries
+Setting Permissions Boundaries to Limit Role Permissions
+Use Cases for Permissions Boundaries in Complex Architectures
+Example/Demo:
+
+Demo: Create a permissions boundary to restrict the permissions of an IAM role or user to a subset of allowed actions.
+Module 5: Monitoring and Auditing IAM
+-------------------------------
+
+--------------------------------
+5.1 Monitoring IAM with CloudTrail
+
+Introduction to AWS CloudTrail
+Tracking IAM Activities and Events
+Using CloudTrail for IAM Security Audits
+Example/Demo:
+
+Demo: Enable CloudTrail and view IAM user activity logs.
+-------------------------------
+
+--------------------------------
+5.2 Logging IAM Events and Alerts
+
+Enabling CloudWatch Logs for IAM Activities
+Setting up Alerts for Suspicious IAM Activity
+Best Practices for Auditing IAM Usage
+Example/Demo:
+
+Demo: Create a CloudWatch Alarm that triggers an alert when a certain IAM event occurs (e.g., permission changes).
+-------------------------------
+
+--------------------------------
+5.3 AWS Config for IAM Compliance
+
+Using AWS Config to Track IAM Changes
+Config Rules for IAM Resource Compliance
+Ensuring Best Practices through Config Rules
+Example/Demo:
+
+Demo: Set up AWS Config to monitor changes to IAM roles and user policies for compliance with best practices.
+-------------------------------
+
+--------------------------------
+5.4 AWS IAM Reporting Tools
+
+Using IAM Access Analyzer for Reports
+Custom Reports and Dashboards in AWS Management Console
+Visualizing IAM Activity with AWS QuickSight
+Example/Demo:
+
+Demo: Use AWS QuickSight to create visual reports based on IAM access logs.
+-------------------------------
+
+--------------------------------

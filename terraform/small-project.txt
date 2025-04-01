@@ -1,0 +1,214 @@
+Designing and deploying a complete AWS infrastructure for a scalable web application is an excellent project. Here’s a detailed breakdown of the infrastructure components and how to implement them step-by-step using Infrastructure as Code (IaC) with **Terraform**.
+
+---
+
+### **Project Overview**
+**Goal**: Design and deploy an AWS infrastructure to host a scalable web application stack with the following components:
+
+1. **VPC (Virtual Private Cloud)**: Custom network configuration with subnets, route tables, and internet gateways.
+2. **EC2 Instances**: For hosting the application backend.
+3. **ALB (Application Load Balancer)**: Distribute traffic to multiple EC2 instances.
+4. **RDS (Relational Database Service)**: Managed database for application data.
+5. **Security Groups**: Control inbound and outbound traffic.
+6. **Scaling Policies**: Auto-scaling for EC2 instances.
+7. **Monitoring and Logging**: Use CloudWatch for performance and logging.
+
+---
+
+### **Design**
+#### **Architecture Diagram**
+1. **VPC**:
+   - Public and private subnets across multiple Availability Zones.
+   - Route tables for internet and internal routing.
+
+2. **Compute**:
+   - EC2 instances in private subnets (auto-scaling).
+   - ALB in public subnets.
+
+3. **Database**:
+   - RDS in private subnets.
+   - Access restricted to backend EC2 instances.
+
+4. **Security**:
+   - Security groups for ALB, EC2, and RDS.
+   - IAM roles for least privilege.
+
+5. **Monitoring**:
+   - CloudWatch for instance metrics and application logs.
+
+---
+
+### **Implementation Steps**
+
+1. **Create VPC and Networking Components**:
+   - Define a custom VPC with CIDR block.
+   - Create public and private subnets in multiple AZs.
+   - Configure Internet Gateway (IGW) and NAT Gateway.
+
+2. **Launch ALB and Target Group**:
+   - Define the ALB in public subnets.
+   - Configure listener rules for HTTP/HTTPS traffic.
+   - Associate ALB with a target group linked to EC2 instances.
+
+3. **Deploy EC2 Instances**:
+   - Define an Auto Scaling Group (ASG).
+   - Launch configuration or template with application AMI.
+   - Attach EC2 instances to the ALB target group.
+
+4. **Set Up RDS**:
+   - Use a managed MySQL or PostgreSQL database.
+   - Place it in private subnets.
+   - Configure DB parameters and security.
+
+5. **Define Security Groups**:
+   - Allow traffic from ALB to EC2.
+   - Restrict RDS access to EC2 instances.
+   - Ensure least privilege access.
+
+6. **Configure Monitoring**:
+   - Set up CloudWatch alarms for key metrics.
+   - Enable logging for ALB and EC2.
+
+---
+
+### **Terraform Code Example**
+Below is a simplified Terraform configuration for the project:
+
+#### **VPC and Networking**
+```hcl
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "MainVPC"
+  }
+}
+
+resource "aws_subnet" "public" {
+  count = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index)
+  map_public_ip_on_launch = true
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  tags = {
+    Name = "PublicSubnet-${count.index}"
+  }
+}
+
+resource "aws_subnet" "private" {
+  count = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  tags = {
+    Name = "PrivateSubnet-${count.index}"
+  }
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+}
+```
+
+#### **ALB and Target Group**
+```hcl
+resource "aws_lb" "app" {
+  name               = "app-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+```
+
+#### **EC2 and ASG**
+```hcl
+resource "aws_launch_template" "app" {
+  name          = "app-launch-template"
+  instance_type = "t2.micro"
+  image_id      = data.aws_ami.ubuntu.id
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo apt update -y
+              sudo apt install -y nginx
+              EOF
+}
+
+resource "aws_autoscaling_group" "app" {
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+  vpc_zone_identifier = aws_subnet.private[*].id
+  min_size            = 1
+  max_size            = 3
+  desired_capacity    = 2
+  target_group_arns   = [aws_lb_target_group.app.arn]
+}
+```
+
+#### **RDS**
+```hcl
+resource "aws_db_instance" "db" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t2.micro"
+  name                 = "appdb"
+  username             = "admin"
+  password             = "password"
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  skip_final_snapshot  = true
+  db_subnet_group_name = aws_db_subnet_group.main.name
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = "main-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+}
+```
+
+---
+
+### **Outputs**
+```hcl
+output "alb_dns" {
+  value = aws_lb.app.dns_name
+}
+
+output "db_endpoint" {
+  value = aws_db_instance.db.endpoint
+}
+```
+
+---
+
+### **Next Steps**
+1. **Apply the Configuration**:
+   - Run `terraform init`, `terraform plan`, and `terraform apply`.
+
+2. **Test the Deployment**:
+   - Access the ALB DNS to confirm that the application is running.
+
+3. **Scale and Optimize**:
+   - Configure auto-scaling policies.
+   - Implement additional monitoring with CloudWatch.
+
+This project not only demonstrates AWS infrastructure design but also best practices like modularity, scalability, and security. Let me know if you’d like to expand on any part!

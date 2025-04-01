@@ -1,0 +1,38 @@
+# basic.tf  Define the Terraform configuration
+terraform {
+  # Specify the required providers
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"          # AWS provider source
+      version = "5.78.0"                 # Compatible with AWS provider version 5.x
+    }
+  }
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = "us-east-1"                   # Default AWS region for resources
+}
+
+# Declare the input variable for the instance type
+variable "instance_type" {
+  type        = string                   # Input must be a string
+  description = "Type of EC2 instance, e.g., t2.micro"
+  default     = "t2.micro"               # Default value for simplicity
+}
+
+# Create an EC2 instance
+resource "aws_instance" "basic_instance" {
+  ami           = "ami-087c17d1fe0178315" # Example Amazon Machine Image (AMI) ID
+  instance_type = var.instance_type       # Use the instance_type variable
+
+  # Add tags for resource identification
+  tags = {
+    Name = "BasicExampleInstance"        # Static tag for instance name
+  }
+}
+
+# Output the public IP address of the created instance
+output "public_ip" {
+  value = aws_instance.basic_instance.public_ip # Retrieve instance's public IP
+}

@@ -1,0 +1,1042 @@
+#### **S3 Example**
+**Basic**: Create an S3 Bucket  
+**Intermediate**: Enable Versioning and Bucket Policy  
+**Advanced**: Configure S3 as a Static Website Hosting
+### **S3 Examples with Terraform**
+
+#### **Basic**: Create an S3 Bucket
+hcl
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create an S3 bucket
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "example-bucket-basic" # Unique bucket name
+  acl    = "private"              # Access control list for the bucket (default is private)
+
+  tags = {
+    Name        = "Example-Basic-Bucket"
+    Environment = "Dev"
+  }
+}
+
+# Output the bucket name
+output "bucket_name" {
+  value = aws_s3_bucket.example_bucket.bucket
+}
+
+Here’s a detailed rewrite of Terraform code with four basic examples for AWS S3. Each example demonstrates different capabilities of S3 while making use of variables, loops, and provisioners. Each line is thoroughly commented to explain its purpose.
+
+---
+
+### **Variables**
+Define the input variables to make the code dynamic.
+
+```hcl
+# Variable to define the bucket name prefix
+variable "bucket_prefix" {
+  description = "Prefix for S3 bucket names"
+  type        = string
+  default     = "example-bucket"
+}
+
+# Variable for the number of buckets to create
+variable "bucket_count" {
+  description = "Number of S3 buckets to create"
+  type        = number
+  default     = 2
+}
+
+# Variable for enabling versioning
+variable "enable_versioning" {
+  description = "Flag to enable versioning on S3 buckets"
+  type        = bool
+  default     = true
+}
+
+# Variable for tags
+variable "tags" {
+  description = "Tags to apply to S3 buckets"
+  type        = map(string)
+  default     = {
+    Environment = "Dev"
+    Team        = "Ops"
+  }
+}
+```
+
+---
+
+### **Example 1: Basic S3 Bucket Creation with Loop**
+This example uses a loop to create multiple S3 buckets.
+
+```hcl
+# Create multiple S3 buckets using a loop
+resource "aws_s3_bucket" "buckets" {
+  count = var.bucket_count # The number of buckets to create, controlled by a variable
+
+  bucket = "${var.bucket_prefix}-${count.index}" # Generate unique bucket names with the prefix and index
+
+  acl    = "private" # Set the Access Control List (ACL) to private for all buckets
+
+  tags = merge(var.tags, { # Combine default tags with additional metadata
+    Name = "${var.bucket_prefix}-${count.index}"
+  })
+}
+```
+
+---
+
+### **Example 2: Enable Versioning**
+This example applies versioning to the buckets created in Example 1.
+
+```hcl
+# Enable versioning for each S3 bucket if the flag is true
+resource "aws_s3_bucket_versioning" "versioning" {
+  count = var.enable_versioning ? var.bucket_count : 0 # Only apply versioning if enabled
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Attach versioning to the corresponding bucket
+  versioning_configuration {
+    status = "Enabled" # Enable versioning on the bucket
+  }
+}
+
+---
+
+### **Example 3: Add Bucket Policy**
+This example adds a bucket policy to allow public read access (for demonstration purposes, not recommended for production).
+
+```hcl
+# Add a policy to allow public read access to S3 buckets
+resource "aws_s3_bucket_policy" "bucket_policy" {
+  count = var.bucket_count # Apply a policy to each bucket
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Specify the bucket to attach the policy
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject",
+        Effect    = "Allow",
+        Principal = "*", # Allow access from any principal
+        Action    = "s3:GetObject", # Allow only GetObject action
+        Resource  = "${aws_s3_bucket.buckets[count.index].arn}/*" # Apply to all objects in the bucket
+      }
+    ]
+  })
+}
+
+### **Example 4: Provisioner to Upload Initial Files**
+This example uses provisioners to upload an initial file to the bucket after creation.
+
+resource "aws_s3_bucket_object" "initial_file" {
+  count = var.bucket_count # Upload files to all buckets
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Specify the bucket where the file will be uploaded
+
+  key    = "initial-file.txt" # Name of the file in the bucket
+  source = "./initial-file.txt" # Local file to upload (ensure this file exists in the same directory)
+
+  content_type = "text/plain" # Set the content type of the uploaded file
+
+  depends_on = [aws_s3_bucket.buckets] # Ensure the bucket is created before uploading
+}
+
+# Local-exec provisioner to notify after upload
+resource "null_resource" "upload_notification" {
+  count = var.bucket_count # Notify for each bucket
+
+  provisioner "local-exec" {
+    command = "echo 'File uploaded to bucket: ${aws_s3_bucket.buckets[count.index].id}'" # Output a success message
+  }
+
+  depends_on = [aws_s3_bucket_object.initial_file] # Wait until the file upload is complete
+}
+
+
+### **Apply the Configuration**
+
+1. Create a file named `initial-file.txt` with some content in the same directory as the Terraform code.
+2. Initialize Terraform:
+   ```bash
+   terraform init
+   ```
+3. Preview the plan:
+   ```bash
+   terraform plan
+   ```
+4. Apply the configuration:
+   ```bash
+   terraform apply
+   ```
+
+
+#### **Intermediate**: Enable Versioning and Bucket Policy
+hcl
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create an S3 bucket
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "example-bucket-intermediate" # Unique bucket name
+  acl    = "private"
+
+  tags = {
+    Name        = "Example-Intermediate-Bucket"
+    Environment = "Dev"
+  }
+}
+
+# Enable versioning for the S3 bucket
+resource "aws_s3_bucket_versioning" "example_versioning" {
+  bucket = aws_s3_bucket.example_bucket.id # Reference the bucket
+  versioning_configuration {
+    status = "Enabled" # Enable versioning
+  }
+}
+
+# Add a bucket policy to allow read-only access to the bucket
+resource "aws_s3_bucket_policy" "example_policy" {
+  bucket = aws_s3_bucket.example_bucket.id # Reference the bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["s3:GetObject"],        # Allow read-only access
+        Resource = "${aws_s3_bucket.example_bucket.arn}/*", # Apply policy to all objects in the bucket
+        Principal = {
+          AWS = "*"
+        },
+      },
+    ],
+  })
+}
+
+# Output the bucket name and policy status
+output "bucket_name" {
+  value = aws_s3_bucket.example_bucket.bucket
+}
+
+output "bucket_policy" {
+  value = aws_s3_bucket_policy.example_policy.policy
+----------------------------------
+
+Here’s a rewritten Terraform configuration for **intermediate AWS S3 examples** using variables, loops, conditionals, and advanced features such as lifecycle rules, replication, and server-side encryption. Each example includes detailed comments to explain every line.
+
+---
+
+### **Variables**
+Define the input variables to make the code reusable and configurable.
+
+```hcl
+# Prefix for S3 bucket names
+variable "bucket_prefix" {
+  description = "Prefix for S3 bucket names"
+  type        = string
+  default     = "intermediate-bucket"
+}
+
+# Number of buckets to create
+variable "bucket_count" {
+  description = "Number of S3 buckets to create"
+  type        = number
+  default     = 2
+}
+
+# Enable versioning flag
+variable "enable_versioning" {
+  description = "Enable versioning on S3 buckets"
+  type        = bool
+  default     = true
+}
+
+# Enable replication flag
+variable "enable_replication" {
+  description = "Enable cross-region replication"
+  type        = bool
+  default     = false
+}
+
+# Target replication bucket (required if enable_replication is true)
+variable "replication_target_bucket" {
+  description = "Target bucket for replication (should already exist)"
+  type        = string
+  default     = ""
+}
+
+# Tags to apply to all buckets
+variable "tags" {
+  description = "Tags to apply to S3 buckets"
+  type        = map(string)
+  default     = {
+    Environment = "Dev"
+    Project     = "IntermediateS3"
+  }
+}
+
+---
+
+### **Example 1: Create Buckets with Server-Side Encryption**
+This example creates S3 buckets with default server-side encryption enabled.
+
+```hcl
+# Create multiple S3 buckets with server-side encryption
+resource "aws_s3_bucket" "buckets" {
+  count = var.bucket_count # Create a number of buckets defined by the variable
+
+  bucket = "${var.bucket_prefix}-${count.index}" # Generate bucket names dynamically
+
+  acl    = "private" # Set ACL to private for security
+
+  server_side_encryption_configuration { # Enable default server-side encryption
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256" # Use AES256 encryption
+      }
+    }
+  }
+
+  tags = merge(var.tags, { # Merge default tags with bucket-specific metadata
+    Name = "${var.bucket_prefix}-${count.index}"
+  })
+}
+
+### **Example 2: Apply Lifecycle Rules**
+This example applies lifecycle rules for object management (e.g., transitioning objects to Glacier and automatic deletion).
+
+# Apply lifecycle rules to manage bucket storage
+resource "aws_s3_bucket_lifecycle_configuration" "lifecycle" {
+  count = var.bucket_count # Apply rules to all buckets
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Attach rules to corresponding buckets
+
+  rule {
+    id     = "archive-then-delete" # Rule identifier
+    status = "Enabled"            # Enable the rule
+
+    # Transition objects to Glacier storage class after 30 days
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+
+    # Automatically delete objects after 365 days
+    expiration {
+      days = 365
+    }
+  }
+}
+```
+
+---
+
+### **Example 3: Enable Cross-Region Replication**
+This example sets up replication between buckets if replication is enabled.
+
+```hcl
+# Enable cross-region replication if the flag is true
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  count = var.enable_replication ? var.bucket_count : 0 # Apply replication only if enabled
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Source bucket for replication
+
+  role = aws_iam_role.replication_role.arn # IAM role to handle replication
+
+  rules {
+    id     = "replication-rule" # Rule identifier
+    status = "Enabled"          # Enable the rule
+
+    filter { # Replicate all objects
+      prefix = ""
+    }
+
+    destination {
+      bucket        = var.replication_target_bucket # Target bucket for replication
+      storage_class = "STANDARD"                   # Storage class for replicated objects
+    }
+  }
+}
+
+# IAM role for replication
+resource "aws_iam_role" "replication_role" {
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "s3.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# IAM policy for replication role
+resource "aws_iam_role_policy" "replication_policy" {
+  role = aws_iam_role.replication_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl"
+        ],
+        Resource = [
+          "${aws_s3_bucket.buckets[*].arn}/*", # Access to all objects in source buckets
+          "${var.replication_target_bucket}/*" # Access to all objects in the target bucket
+        ]
+      }
+    ]
+  })
+}
+
+
+### **Example 4: Use Provisioners to Upload Default Files**
+This example uses provisioners to upload a default configuration file to each bucket.
+
+# Upload a default file to all S3 buckets
+resource "aws_s3_bucket_object" "default_file" {
+  count = var.bucket_count # Upload files to all buckets
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Specify the bucket
+
+  key    = "default-config.json" # Name of the object in the bucket
+  source = "./default-config.json" # Local file to upload (ensure the file exists in your directory)
+
+  content_type = "application/json" # Set the content type to JSON
+
+  depends_on = [aws_s3_bucket.buckets] # Ensure the bucket is created before uploading
+}
+
+# Provisioner to log file upload
+resource "null_resource" "upload_notification" {
+  count = var.bucket_count # Notify for each bucket
+
+  provisioner "local-exec" {
+    command = "echo 'Uploaded default-config.json to ${aws_s3_bucket.buckets[count.index].id}'" # Log upload success
+  }
+
+  depends_on = [aws_s3_bucket_object.default_file] # Wait for file upload to complete
+}
+
+
+### **Apply the Configuration**
+
+1. **Create the Default File**:
+   - Save a file named `default-config.json` in the same directory. Example content:
+     ```json
+     {
+       "version": "1.0",
+       "status": "default"
+     }
+     ```
+
+2. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+3. **Preview the Plan**:
+   ```bash
+   terraform plan
+   ```
+
+4. **Apply the Configuration**:
+   ```bash
+   terraform apply
+   ```
+#### **Advanced**: Configure S3 as a Static Website Hosting
+hcl
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create an S3 bucket for static website hosting
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "example-bucket-advanced" # Unique bucket name
+  acl    = "public-read"             # Set bucket to public for static website access
+
+  website {
+    index_document = "index.html"   # Main entry point
+    error_document = "error.html"  # Error page
+  }
+
+  tags = {
+    Name        = "Example-Advanced-Bucket"
+    Environment = "Prod"
+  }
+}
+
+# Add the bucket policy to make the bucket publicly accessible
+resource "aws_s3_bucket_policy" "example_policy" {
+  bucket = aws_s3_bucket.example_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["s3:GetObject"],
+        Resource = "${aws_s3_bucket.example_bucket.arn}/*", # Allow access to all objects in the bucket
+        Principal = "*",
+      },
+    ],
+  })
+}
+
+# Upload files to the S3 bucket
+resource "aws_s3_bucket_object" "index_html" {
+  bucket = aws_s3_bucket.example_bucket.id
+  key    = "index.html"                       # Object key (file name in the bucket)
+  source = "path/to/index.html"               # Path to the local file
+  acl    = "public-read"                      # Set object to public
+}
+
+resource "aws_s3_bucket_object" "error_html" {
+  bucket = aws_s3_bucket.example_bucket.id
+  key    = "error.html"
+  source = "path/to/error.html"
+  acl    = "public-read"
+}
+
+# Output the S3 static website endpoint
+output "website_endpoint" {
+  value = aws_s3_bucket.example_bucket.website_endpoint
+}
+
+
+---
+
+## **1. Basic Example: Create an S3 Bucket**
+
+This example demonstrates how to create a simple AWS S3 bucket.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Set the AWS region
+}
+
+# Create an S3 bucket
+resource "aws_s3_bucket" "basic_bucket" {
+  bucket = "my-basic-s3-bucket-12345"  # Specify a unique bucket name
+
+  tags = {
+    Name        = "Basic-S3-Bucket"  # Add a tag for bucket identification
+    Environment = "Development"      # Add environment-specific tagging
+  }
+}
+
+
+## **2. Intermediate Example: Enable Versioning and Add a Bucket Policy**
+
+This example adds **versioning** to the S3 bucket and applies a **bucket policy** to allow public read access.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Set the AWS region
+}
+
+# Create an S3 bucket
+resource "aws_s3_bucket" "versioned_bucket" {
+  bucket = "my-intermediate-s3-bucket-12345"  # Specify a unique bucket name
+
+  tags = {
+    Name        = "Intermediate-S3-Bucket"  # Add a name tag for the bucket
+    Environment = "Testing"                 # Add an environment tag
+  }
+}
+
+# Enable versioning on the S3 bucket
+resource "aws_s3_bucket_versioning" "versioning" {
+  bucket = aws_s3_bucket.versioned_bucket.id  # Reference the bucket created above
+
+  versioning_configuration {
+    status = "Enabled"  # Enable versioning on the bucket
+  }
+}
+
+# Add a bucket policy to allow public read access
+resource "aws_s3_bucket_policy" "public_read_policy" {
+  bucket = aws_s3_bucket.versioned_bucket.id  # Attach the policy to the bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17",  # Define the IAM policy version
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject",  # Statement ID
+        Effect    = "Allow",               # Allow access
+        Principal = "*",                   # Allow all users
+        Action    = "s3:GetObject",        # Allow the GetObject action (read access)
+        Resource  = "${aws_s3_bucket.versioned_bucket.arn}/*"  # Apply to all objects in the bucket
+      }
+    ]
+  })
+}
+
+
+---
+
+## **3. Advanced Example: Configure S3 for Static Website Hosting**
+
+This example configures S3 as a **static website host** and uploads an `index.html` file as the default page.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Set the AWS region
+}
+
+# Create an S3 bucket
+resource "aws_s3_bucket" "website_bucket" {
+  bucket = "my-advanced-static-website-bucket-12345"  # Specify a unique bucket name
+
+  tags = {
+    Name        = "Advanced-S3-Website"  # Add a name tag for the bucket
+    Environment = "Production"           # Add environment-specific tagging
+  }
+}
+
+# Enable static website hosting
+resource "aws_s3_bucket_website_configuration" "website_config" {
+  bucket = aws_s3_bucket.website_bucket.id  # Reference the bucket created above
+
+  index_document {
+    suffix = "index.html"  # Specify the default index document
+  }
+
+  error_document {
+    key = "error.html"  # Specify the error document
+  }
+}
+
+# Upload the index.html file to the S3 bucket
+resource "aws_s3_object" "index_html" {
+  bucket = aws_s3_bucket.website_bucket.id  # Reference the bucket
+  key    = "index.html"                     # Object name (file name)
+  source = "index.html"                     # Local path to the file
+  acl    = "public-read"                    # Make the file publicly accessible
+  content_type = "text/html"                # Define the content type
+}
+
+# Upload the error.html file to the S3 bucket
+resource "aws_s3_object" "error_html" {
+  bucket = aws_s3_bucket.website_bucket.id  # Reference the bucket
+  key    = "error.html"                     # Object name (file name)
+  source = "error.html"                     # Local path to the file
+  acl    = "public-read"                    # Make the file publicly accessible
+  content_type = "text/html"                # Define the content type
+}
+
+# Add a bucket policy to allow public read access
+resource "aws_s3_bucket_policy" "website_policy" {
+  bucket = aws_s3_bucket.website_bucket.id  # Attach the policy to the bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject",
+        Effect    = "Allow",
+        Principal = "*",
+        Action    = "s3:GetObject",
+        Resource  = "${aws_s3_bucket.website_bucket.arn}/*"  # Allow access to all objects
+      }
+    ]
+  })
+}
+
+# Output the website endpoint
+output "website_url" {
+  value = aws_s3_bucket_website_configuration.website_config.website_endpoint  # Output the website URL
+}
+
+=========================================
+### **Terraform S3 Examples with Variables, Loops, and Conditions**
+
+# Define variables for configuration
+variable "region" {
+  description = "AWS region to deploy resources"
+  type        = string
+  default     = "us-west-2" # Default AWS region
+}
+
+variable "bucket_names" {
+  description = "List of bucket names for different environments"
+  type        = list(string)
+  default     = ["example-basic-bucket", "example-intermediate-bucket", "example-advanced-bucket"]
+}
+
+variable "enable_versioning" {
+  description = "Flag to enable versioning for buckets"
+  type        = bool
+  default     = true
+}
+
+variable "environment_tags" {
+  description = "Tags for different environments"
+  type        = map(string)
+  default     = {
+    basic       = "Development"
+    intermediate = "Testing"
+    advanced     = "Production"
+  }
+}
+
+# AWS Provider Configuration
+provider "aws" {
+  region = var.region # Use region from variable
+}
+
+# Create S3 Buckets using a loop
+resource "aws_s3_bucket" "s3_buckets" {
+  for_each = { for index, name in var.bucket_names : index => name } # Loop over bucket names
+
+  bucket = each.value # Use bucket name from the list
+  acl    = "private" # Default ACL for all buckets
+
+  tags = {
+    Name        = each.value # Tag with bucket name
+    Environment = lookup(var.environment_tags, each.key, "Unknown") # Tag environment dynamically
+  }
+}
+
+# Enable Versioning Conditionally
+resource "aws_s3_bucket_versioning" "versioning" {
+  for_each = var.enable_versioning ? aws_s3_bucket.s3_buckets : {} # Enable versioning if the flag is true
+
+  bucket = aws_s3_bucket.s3_buckets[each.key].id # Reference the bucket dynamically
+  versioning_configuration {
+    status = "Enabled" # Enable versioning
+  }
+}
+
+# Add Bucket Policies Conditionally
+resource "aws_s3_bucket_policy" "bucket_policies" {
+  for_each = aws_s3_bucket.s3_buckets
+
+  bucket = aws_s3_bucket.s3_buckets[each.key].id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject",
+        Effect    = "Allow",
+        Principal = "*",
+        Action    = "s3:GetObject",
+        Resource  = "${aws_s3_bucket.s3_buckets[each.key].arn}/*"
+      }
+    ]
+  })
+}
+
+# Configure Advanced S3 Bucket for Static Website Hosting
+resource "aws_s3_bucket_website_configuration" "website_config" {
+  for_each = { for key, bucket in aws_s3_bucket.s3_buckets : key => bucket if key == "advanced" }
+
+  bucket = each.value.id # Reference the advanced bucket
+
+  index_document {
+    suffix = "index.html" # Main entry file
+  }
+
+  error_document {
+    key = "error.html" # Error page
+  }
+}
+
+# Upload Files for Static Website Hosting
+resource "aws_s3_object" "website_files" {
+  for_each = { for key, bucket in aws_s3_bucket.s3_buckets : key => bucket if key == "advanced" }
+
+  bucket = each.value.id
+
+  dynamic "file" {
+    for_each = ["index.html", "error.html"] # List of files to upload
+    content {
+      key    = file.value # File name as the key
+      source = "path/to/${file.value}" # Source file path
+      acl    = "public-read" # Make files publicly accessible
+    }
+  }
+}
+
+# Outputs to Display Information
+output "bucket_names" {
+  value       = [for bucket in aws_s3_bucket.s3_buckets : bucket.bucket] # List bucket names
+  description = "List of created S3 bucket names"
+}
+
+output "bucket_policies" {
+  value       = [for key, policy in aws_s3_bucket_policy.bucket_policies : policy.policy]
+  description = "Bucket policies for the created buckets"
+}
+
+output "website_endpoints" {
+  value       = [for key, config in aws_s3_bucket_website_configuration.website_config : config.website_endpoint]
+  description = "Website endpoints for the advanced buckets"
+}
+
+--------------------------------------
+Here is a Terraform configuration with **four advanced AWS S3 examples**, utilizing variables, loops, conditionals, and other advanced features such as intelligent tiering, bucket notifications, logging, and advanced replication settings.
+
+---
+
+### **Variables**
+Define reusable and configurable input variables.
+
+```hcl
+# Bucket name prefix
+variable "bucket_prefix" {
+  description = "Prefix for S3 bucket names"
+  type        = string
+  default     = "advanced-s3-bucket"
+}
+
+# Number of buckets to create
+variable "bucket_count" {
+  description = "Number of S3 buckets to create"
+  type        = number
+  default     = 3
+}
+
+# Enable intelligent tiering flag
+variable "enable_intelligent_tiering" {
+  description = "Enable intelligent tiering for objects in buckets"
+  type        = bool
+  default     = true
+}
+
+# Enable logging flag
+variable "enable_logging" {
+  description = "Enable server access logging for buckets"
+  type        = bool
+  default     = true
+}
+
+# Logging target bucket (should already exist)
+variable "logging_target_bucket" {
+  description = "Target bucket for server access logs"
+  type        = string
+  default     = "logging-target-bucket"
+}
+
+# Tags for all resources
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default     = {
+    Environment = "Prod"
+    Team        = "DataOps"
+  }
+}
+```
+
+---
+
+### **Example 1: S3 Bucket with Intelligent Tiering**
+This example enables intelligent tiering for objects based on the variable flag.
+
+```hcl
+# Create S3 buckets
+resource "aws_s3_bucket" "buckets" {
+  count = var.bucket_count # Number of buckets to create
+
+  bucket = "${var.bucket_prefix}-${count.index}" # Unique bucket names using prefix and index
+
+  acl    = "private" # Secure the bucket with private access
+
+  tags = merge(var.tags, { # Merge common tags with bucket-specific tags
+    Name = "${var.bucket_prefix}-${count.index}"
+  })
+}
+
+# Enable intelligent tiering for objects if the flag is true
+resource "aws_s3_bucket_object" "intelligent_tiering" {
+  count = var.enable_intelligent_tiering ? var.bucket_count : 0 # Apply only if enabled
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Attach to the bucket
+
+  key    = "intelligent-tiering-object-${count.index}" # Key name for the object
+  source = "./intelligent-tiering-placeholder.txt" # Local file placeholder to upload
+
+  storage_class = "INTELLIGENT_TIERING" # Intelligent tiering storage class
+}
+
+### **Example 2: Server Access Logging**
+This example enables logging for each bucket, sending logs to a centralized logging bucket.
+
+# Enable server access logging for buckets
+resource "aws_s3_bucket_logging" "bucket_logging" {
+  count = var.enable_logging ? var.bucket_count : 0 # Apply only if logging is enabled
+
+  bucket        = aws_s3_bucket.buckets[count.index].id # Bucket to enable logging on
+  target_bucket = var.logging_target_bucket             # Centralized bucket for logs
+
+  target_prefix = "logs/${aws_s3_bucket.buckets[count.index].id}/" # Organize logs by source bucket
+}
+
+### **Example 3: S3 Bucket Notifications**
+This example configures S3 bucket notifications to trigger a Lambda function.
+
+```hcl
+# Configure bucket notifications
+resource "aws_s3_bucket_notification" "bucket_notifications" {
+  count = var.bucket_count # Apply notifications to all buckets
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Bucket to configure notifications on
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.process_s3_events.arn # Lambda function to trigger
+    events              = ["s3:ObjectCreated:*"]                    # Trigger on object creation
+    filter_prefix       = "uploads/"                                # Only for objects in 'uploads/' folder
+    filter_suffix       = ".jpg"                                    # Only for JPEG files
+  }
+}
+
+# Example Lambda function for processing
+resource "aws_lambda_function" "process_s3_events" {
+  function_name = "process_s3_events"
+
+  runtime = "python3.9"
+  handler = "lambda_function.lambda_handler"
+  role    = aws_iam_role.lambda_role.arn
+
+  filename = "lambda_function.zip" # Ensure this file exists in your directory
+
+  source_code_hash = filebase64sha256("lambda_function.zip") # Checksum for the function code
+}
+
+# IAM role for the Lambda function
+resource "aws_iam_role" "lambda_role" {
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  # Attach policies for S3 read access and CloudWatch logging
+  managed_policy_arns = [
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  ]
+}
+
+### **Example 4: Advanced Cross-Region Replication**
+This example demonstrates advanced replication with multiple rules and filters.
+
+# Enable advanced replication for buckets
+resource "aws_s3_bucket_replication_configuration" "advanced_replication" {
+  count = var.bucket_count # Apply replication to all buckets
+
+  bucket = aws_s3_bucket.buckets[count.index].id # Source bucket
+
+  role = aws_iam_role.replication_role.arn # IAM role for replication
+
+  rules {
+    id     = "replicate-images" # Rule for replicating images
+    status = "Enabled"
+
+    filter {
+      prefix = "images/" # Only replicate objects with the 'images/' prefix
+    }
+
+    destination {
+      bucket        = "arn:aws:s3:::replication-target-bucket" # Replace with target bucket ARN
+      storage_class = "STANDARD" # Replicate with standard storage class
+    }
+  }
+
+  rules {
+    id     = "replicate-logs" # Rule for replicating logs
+    status = "Enabled"
+
+    filter {
+      prefix = "logs/" # Only replicate objects with the 'logs/' prefix
+    }
+
+    destination {
+      bucket        = "arn:aws:s3:::replication-target-bucket" # Replace with target bucket ARN
+      storage_class = "GLACIER" # Replicate logs with Glacier storage class
+    }
+  }
+}
+
+# IAM role for replication
+resource "aws_iam_role" "replication_role" {
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "s3.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  # Policy for replication permissions
+  inline_policy {
+    name   = "replication-policy"
+    policy = jsonencode({
+      Version = "2012-10-17",
+      Statement = [
+        {
+          Effect   = "Allow",
+          Action   = [
+            "s3:ReplicateObject",
+            "s3:ReplicateDelete",
+            "s3:GetObjectVersionForReplication",
+            "s3:GetObjectVersionAcl"
+          ],
+          Resource = [
+            "${aws_s3_bucket.buckets[*].arn}/*", # Source buckets
+            "arn:aws:s3:::replication-target-bucket/*" # Target bucket
+          ]
+        }
+      ]
+    })
+  }
+}
+
+### **Apply the Configuration**
+
+1. **Prepare Necessary Files**:
+   - Create `intelligent-tiering-placeholder.txt` and `lambda_function.zip` in your Terraform directory.
+2. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+3. **Preview the Plan**:
+   ```bash
+   terraform plan
+   ```
+4. **Apply the Configuration**:
+   ```bash
+   terraform apply
+   ```

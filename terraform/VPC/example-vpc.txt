@@ -1,0 +1,374 @@
+Creates VPC with configurable CIDR block
+Public and private subnets across multiple AZs
+NAT Gateway for private subnet internet access
+Internet Gateway for public subnet access
+Appropriate route tables and associations
+Variables for customization
+Outputs for resource references
+
+# Define input variable for VPC configuration
+# Allows customization of the VPC CIDR block and name
+variable "vpc_config" {
+  description = "VPC configuration including CIDR block and tags"
+  type = object({
+    cidr_block = string  # CIDR block for the VPC
+    name       = string  # Name tag for the VPC
+  })
+  default = {
+    cidr_block = "10.0.0.0/16"  # Default CIDR block
+    name       = "custom-vpc"   # Default VPC name
+  }
+}
+
+# Define input variable for subnet configuration
+# Specifies the CIDR block, availability zone, and type for each subnet
+variable "subnet_config" {
+  description = "Subnet configurations for public and private subnets"
+  type = list(object({
+    cidr_block = string   # CIDR block for the subnet
+    az         = string   # Availability zone for the subnet
+    type       = string   # Subnet type: "public" or "private"
+  }))
+  default = [
+    { cidr_block = "10.0.1.0/24", az = "us-east-1a", type = "public" },
+    { cidr_block = "10.0.2.0/24", az = "us-east-1b", type = "public" },
+    { cidr_block = "10.0.101.0/24", az = "us-east-1a", type = "private" },
+    { cidr_block = "10.0.102.0/24", az = "us-east-1b", type = "private" }
+  ]
+}
+
+# Create the VPC
+# The VPC is the primary networking construct in AWS
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_config.cidr_block  # Assign the CIDR block
+  enable_dns_support   = true                       # Enable DNS support
+  enable_dns_hostnames = true                       # Enable DNS hostnames
+
+  tags = {
+    Name = var.vpc_config.name  # Tag the VPC with the provided name
+  }
+}
+
+# Create an Internet Gateway (IGW) for the VPC
+# The IGW allows public subnets to access the internet
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id  # Associate the IGW with the created VPC
+
+  tags = {
+    Name = "${var.vpc_config.name}-igw"  # Tag the IGW for identification
+  }
+}
+
+# Create an Elastic IP for the NAT Gateway
+# The EIP provides a static public IP address for the NAT Gateway
+resource "aws_eip" "nat_eip" {
+  vpc = true  # Allocate the EIP for VPC use
+
+  tags = {
+    Name = "${var.vpc_config.name}-nat-eip"  # Tag the EIP
+  }
+}
+
+# Create subnets for the VPC
+# Use for_each to dynamically create subnets from the input variable
+resource "aws_subnet" "subnet" {
+  for_each = {
+    for subnet in var.subnet_config :
+    "${subnet.az}-${subnet.type}" => subnet  # Key is AZ and type
+  }
+
+  vpc_id                  = aws_vpc.main.id              # Associate the subnet with the VPC
+  cidr_block              = each.value.cidr_block       # Assign the CIDR block
+  availability_zone       = each.value.az               # Specify the AZ
+  map_public_ip_on_launch = each.value.type == "public" ? true : false  # Enable public IP for public subnets
+
+  tags = {
+    Name = "${var.vpc_config.name}-${each.value.type}-${each.value.az}"  # Tag the subnet with type and AZ
+  }
+}
+
+# Create a NAT Gateway for private subnets
+# The NAT Gateway allows private subnets to access the internet
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat_eip.id  # Use the created Elastic IP
+  subnet_id     = aws_subnet.subnet["us-east-1a-public"].id  # Place NAT Gateway in a public subnet
+
+  tags = {
+    Name = "${var.vpc_config.name}-nat-gateway"  # Tag the NAT Gateway
+  }
+}
+
+# Create a public route table
+# Public route tables handle routing for public subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id  # Associate the route table with the VPC
+
+  tags = {
+    Name = "${var.vpc_config.name}-public-route-table"  # Tag the route table
+  }
+}
+
+# Create a private route table
+# Private route tables handle routing for private subnets
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id  # Associate the route table with the VPC
+
+  tags = {
+    Name = "${var.vpc_config.name}-private-route-table"  # Tag the route table
+  }
+}
+
+# Add a route to the public route table
+# Route all internet-bound traffic to the Internet Gateway
+resource "aws_route" "public_route" {
+  route_table_id         = aws_route_table.public.id  # Public route table ID
+  destination_cidr_block = "0.0.0.0/0"               # Route for all internet-bound traffic
+  gateway_id             = aws_internet_gateway.igw.id  # Internet Gateway ID
+}
+
+# Add a route to the private route table
+# Route all internet-bound traffic to the NAT Gateway
+resource "aws_route" "private_route" {
+  route_table_id         = aws_route_table.private.id  # Private route table ID
+  destination_cidr_block = "0.0.0.0/0"                # Route for all internet-bound traffic
+  nat_gateway_id         = aws_nat_gateway.nat.id      # NAT Gateway ID
+}
+
+# Associate public subnets with the public route table
+# Ensures that public subnets use the IGW for routing
+resource "aws_route_table_association" "public_association" {
+  for_each = {
+    for subnet_key, subnet in aws_subnet.subnet :
+    subnet_key => subnet
+    if subnet.tags["Name"] contains "public"  # Filter for public subnets
+  }
+
+  subnet_id      = each.value.id                 # Subnet ID
+  route_table_id = aws_route_table.public.id    # Public route table ID
+}
+
+# Associate private subnets with the private route table
+# Ensures that private subnets use the NAT Gateway for routing
+resource "aws_route_table_association" "private_association" {
+  for_each = {
+    for subnet_key, subnet in aws_subnet.subnet :
+    subnet_key => subnet
+    if subnet.tags["Name"] contains "private"  # Filter for private subnets
+  }
+
+  subnet_id      = each.value.id                 # Subnet ID
+  route_table_id = aws_route_table.private.id   # Private route table ID
+}
+
+# Output the VPC ID
+output "vpc_id" {
+  description = "The ID of the created VPC"
+  value       = aws_vpc.main.id
+}
+
+# Output the list of public subnet IDs
+output "public_subnet_ids" {
+  description = "List of IDs of the public subnets"
+  value       = [for k, v in aws_subnet.subnet : v.id if v.map_public_ip_on_launch]
+}
+
+# Output the list of private subnet IDs
+output "private_subnet_ids" {
+  description = "List of IDs of the private subnets"
+  value       = [for k, v in aws_subnet.subnet : v.id if !v.map_public_ip_on_launch]
+}
+
+
+---------------------------------
+Two VPCs with separate CIDR ranges
+Each VPC has 2 public and 2 private subnets
+Used for_each loops for resource creation
+Structured variables for better organization
+Each VPC has its own IGW and NAT Gateway
+1. **Variables**: Using `list(object)` to define VPCs, subnets, and their attributes.
+2. **Resources**: Using `for_each` to create VPCs, subnets, Internet Gateways, and NAT Gateways.
+
+### 1. Variable Definitions
+
+We will define variables for VPCs, subnets, and other required attributes.
+
+```hcl
+variable "vpcs" {
+  description = "List of VPCs with their CIDR blocks"
+  type = list(object({
+    name      = string  # VPC name
+    cidr_block = string # CIDR block for the VPC
+  }))
+  default = [
+    { name = "vpc-1", cidr_block = "10.0.0.0/16" },
+    { name = "vpc-2", cidr_block = "10.1.0.0/16" }
+  ]
+}
+
+variable "subnets" {
+  description = "List of subnets with CIDR blocks, availability zones, VPC name, and types"
+  type = list(object({
+    cidr_block = string   # CIDR block for the subnet
+    az         = string   # Availability Zone
+    type       = string   # Subnet type: "public" or "private"
+    vpc_name   = string   # Name of the VPC this subnet belongs to
+  }))
+  default = [
+    # VPC 1 Subnets
+    { cidr_block = "10.0.1.0/24", az = "us-east-1a", type = "public",  vpc_name = "vpc-1" },
+    { cidr_block = "10.0.2.0/24", az = "us-east-1b", type = "public",  vpc_name = "vpc-1" },
+    { cidr_block = "10.0.101.0/24", az = "us-east-1a", type = "private", vpc_name = "vpc-1" },
+    { cidr_block = "10.0.102.0/24", az = "us-east-1b", type = "private", vpc_name = "vpc-1" },
+    # VPC 2 Subnets
+    { cidr_block = "10.1.1.0/24", az = "us-east-1a", type = "public",  vpc_name = "vpc-2" },
+    { cidr_block = "10.1.2.0/24", az = "us-east-1b", type = "public",  vpc_name = "vpc-2" },
+    { cidr_block = "10.1.101.0/24", az = "us-east-1a", type = "private", vpc_name = "vpc-2" },
+    { cidr_block = "10.1.102.0/24", az = "us-east-1b", type = "private", vpc_name = "vpc-2" }
+  ]
+}
+```
+
+### 2. VPC Creation
+
+Using `for_each` to create VPCs dynamically.
+
+```hcl
+resource "aws_vpc" "vpc" {
+  for_each = { for vpc in var.vpcs : vpc.name => vpc }
+
+  cidr_block           = each.value.cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = each.value.name
+  }
+}
+```
+
+### 3. Internet Gateway (IGW) Creation
+
+Each VPC will have its own Internet Gateway.
+
+```hcl
+resource "aws_internet_gateway" "igw" {
+  for_each = aws_vpc.vpc
+
+  vpc_id = each.value.id
+
+  tags = {
+    Name = "IGW-${each.key}"
+  }
+}
+```
+
+### 4. NAT Gateway Creation
+
+For private subnets, we'll create NAT Gateways. This requires creating an Elastic IP for each NAT Gateway.
+
+```hcl
+resource "aws_eip" "nat_eip" {
+  for_each = aws_vpc.vpc
+
+  vpc = true
+
+  tags = {
+    Name = "NAT-EIP-${each.key}"
+  }
+}
+
+resource "aws_nat_gateway" "nat" {
+  for_each = aws_vpc.vpc
+
+  allocation_id = aws_eip.nat_eip[each.key].id
+  subnet_id     = aws_subnet.public[each.key][0].id  # Attach NAT Gateway to the first public subnet
+
+  tags = {
+    Name = "NAT-Gateway-${each.key}"
+  }
+}
+```
+
+### 5. Subnet Creation
+
+Subnets (both public and private) are created for each VPC.
+
+```hcl
+resource "aws_subnet" "subnet" {
+  for_each = {
+    for subnet in var.subnets :
+    "${subnet.vpc_name}-${subnet.az}-${subnet.cidr_block}" => subnet
+  }
+
+  vpc_id                  = aws_vpc.vpc[each.value.vpc_name].id
+  cidr_block              = each.value.cidr_block
+  availability_zone       = each.value.az
+  map_public_ip_on_launch = each.value.type == "public" ? true : false
+
+  tags = {
+    Name = "${each.value.vpc_name}-${each.value.type}-${each.value.az}"
+  }
+}
+```
+
+### 6. Routing Tables
+
+Create routing tables for each VPC and associate them with subnets.
+
+```hcl
+resource "aws_route_table" "route_table" {
+  for_each = aws_vpc.vpc
+
+  vpc_id = each.value.id
+
+  tags = {
+    Name = "RouteTable-${each.key}"
+  }
+}
+
+resource "aws_route_table_association" "subnet_association" {
+  for_each = aws_subnet.subnet
+
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.route_table[each.value.vpc_name].id
+}
+
+resource "aws_route" "internet_route" {
+  for_each = aws_vpc.vpc
+
+  route_table_id         = aws_route_table.route_table[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw[each.key].id
+}
+```
+
+### Summary of Resources:
+
+- **VPC**: Two VPCs created with different CIDR ranges.
+- **Internet Gateway (IGW)**: One IGW for each VPC to enable internet access for public subnets.
+- **NAT Gateway**: One NAT Gateway for each VPC, connected to the public subnet for internet access in private subnets.
+- **Subnets**: Each VPC has two public and two private subnets.
+- **Routing**: Public subnets are connected to the IGW, while private subnets use NAT Gateways.
+
+### Example Output:
+
+Given the input:
+
+#### VPCs:
+- **VPC 1**: CIDR `10.0.0.0/16`, name `vpc-1`
+- **VPC 2**: CIDR `10.1.0.0/16`, name `vpc-2`
+
+#### Subnets:
+- **VPC 1**:
+  - Public: `10.0.1.0/24` in `us-east-1a`
+  - Public: `10.0.2.0/24` in `us-east-1b`
+  - Private: `10.0.101.0/24` in `us-east-1a`
+  - Private: `10.0.102.0/24` in `us-east-1b`
+  
+- **VPC 2**:
+  - Public: `10.1.1.0/24` in `us-east-1a`
+  - Public: `10.1.2.0/24` in `us-east-1b`
+  - Private: `10.1.101.0/24` in `us-east-1a`
+  - Private: `10.1.102.0/24` in `us-east-1b`
+
+This Terraform configuration creates a flexible and dynamic infrastructure with two VPCs, each having public and private subnets, Internet Gateways, and NAT Gateways.

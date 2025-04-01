@@ -1,0 +1,477 @@
+# Update all installed packages to their latest version on RHEL8
+sudo yum -y update
+
+# Install essential tools and dependencies like yum-utils, firewalld, wget, and unzip
+sudo yum install -y yum-utils firewalld wget unzip
+
+# Add the official HashiCorp repository to yum configuration
+sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+
+# Install Terraform from the HashiCorp repository
+sudo yum -y install terraform
+
+# Verify the installed Terraform version
+terraform version
+
+# Create a new Bash configuration file (if not already present)
+touch ~/.bashrc
+
+# Enable Terraform autocomplete for CLI commands
+terraform -install-autocomplete
+
+# Check Terraform version again to confirm installation
+terraform version
+
+
+# Download the AWS CLI installation package
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+# Unzip the downloaded AWS CLI package
+unzip awscliv2.zip
+
+# Install the AWS CLI
+sudo ./aws/install
+
+# Verify the AWS CLI installation by checking its version
+aws --version
+
+# Add AWS CLI to the PATH environment variable
+sudo echo 'export PATH=$PATH:/usr/local/bin' >> ~/.bashrc
+
+# Reload Bash configuration and verify the AWS CLI setup again
+source ~/.bashrc
+
+# Update the AWS CLI to the latest version (if necessary)
+sudo ./aws/install --update
+
+# Verify the updated AWS CLI version
+aws --version
+
+# Navigate to the Terraform configuration directory
+cd ~/terraform-configs/
+
+# Create a directory for storing Terraform configuration files
+sudo mkdir ~/terraform-configs
+
+# Navigate into the Terraform configuration directory
+cd ~/terraform-configs
+
+# Open the main Terraform configuration file for editing
+sudo vi main.tf
+
+# Main Terraform configuration block to specify required providers
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"  # Specify the AWS provider source
+      version = "5.78.0"        # Specify the version of the AWS provider
+    }
+  }
+}
+
+# Define the AWS provider and its configuration
+provider "aws" {
+  profile = "default"          # Use the default AWS CLI profile
+  region  = "us-east-1"        # Set the default AWS region
+}
+
+# Define an AWS EC2 instance resource with its properties
+resource "aws_instance" "my_server" {
+  ami           = "ami-0453ec754f44f9a4a" # Specify the AMI to use for the instance
+  instance_type = "t2.micro"              # Use a t2.micro instance type
+
+  # Define tags for the instance
+  tags = {
+    Name = "Myserver"         # Tag the instance with the name "Myserver"
+  }
+}
+
+# Create the AWS credentials directory
+sudo mkdir -p ~/.aws
+cd ..
+# List all files and directories, including hidden ones
+ls -la
+
+# Edit the AWS credentials file to store access keys and region configuration
+sudo vi ~/.aws/credentials
+
+# Add the default AWS credentials profile
+[default]
+region = us-east-1                         # Default AWS region
+aws_access_key_id=     # Replace with your actual access key ID
+aws_secret_access_key=  # Replace with your secret access key
+
+# Test the AWS CLI setup by fetching caller identity information
+aws sts get-caller-identity
+
+
+# Initialize the Terraform working directory (download providers, set up modules)
+terraform init
+
+# Format Terraform configuration files to standard style
+terraform fmt
+
+# Validate the Terraform configuration files for syntax and errors
+terraform validate
+
+# Create and display an execution plan for Terraform
+terraform plan
+
+# Apply the Terraform configuration to provision resources
+terraform apply # Type "yes" when prompted to confirm
+
+###############################################
+Inputs Variables
+###############################################
+
+# Main Terraform configuration block to specify required providers
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"  # Specify the AWS provider source
+      version = "5.78.0"        # Specify the version of the AWS provider
+    }
+  }
+}
+
+# Define the AWS provider and its configuration
+provider "aws" {
+  profile = "default"          # Use the default AWS CLI profile
+  region  = "us-east-1"        # Set the default AWS region
+}
+
+varaiable "instance_type" {
+ type= string
+ }
+
+# Define an AWS EC2 instance resource with its properties
+resource "aws_instance" "my_server" {
+  ami           = "ami-0453ec754f44f9a4a" # Specify the AMI to use for the instance
+  instance_type = var.instance_type             # Use a t2.micro instance type
+
+  # Define tags for the instance
+  tags = {
+    Name = "Myserver"         # Tag the instance with the name "Myserver"
+  }
+}
+
+run the command 
+terraform plan -var=instance_type="t2.micro"
+
+***create terraform variables file****
+vi terraform.tfvars
+instance_type="t2.micro"
+
+terraform plan
+terraform apply -auto-approve 
+
+###############################################
+Hashicorp Terraform Local Values
+###############################################
+# Main Terraform configuration block to specify required providers
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"  # Specify the AWS provider source
+      version = "5.78.0"        # Specify the version of the AWS provider
+    }
+  }
+}
+
+# Define the AWS provider and its configuration
+provider "aws" {
+  profile = "default"          # Use the default AWS CLI profile
+  region  = "us-east-1"        # Set the default AWS region
+}
+
+varaiable "instance_type" {
+ type= string
+ }
+locals {
+   project_name= "Andrew"
+   
+}
+# Define an AWS EC2 instance resource with its properties
+resource "aws_instance" "my_server" {
+  ami           = "ami-0453ec754f44f9a4a" # Specify the AMI to use for the instance
+  instance_type = var.instance_type             # Use a t2.micro instance type
+
+  # Define tags for the instance
+  tags = {
+    Name = "Myserver-${local.project_name}"         # Tag the instance with the name "Myserver"
+  }
+}
+ 
+
+terraform validate 
+terraform plan 
+
+###############################################
+# HashiCorp Terraform Outputs
+###############################################
+
+# Main Terraform configuration block to specify required providers
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"  # Specify the AWS provider source
+      version = "5.78.0"         # Specify the version of the AWS provider
+    }
+  }
+}
+
+# Define the AWS provider and its configuration
+provider "aws" {
+  profile = "default"           # Use the default AWS CLI profile
+  region  = "us-east-1"         # Set the default AWS region
+}
+
+# Define a variable for the EC2 instance type
+variable "instance_type" {
+  type = string                 # Define the variable type as string
+}
+
+# Define local variables for project-specific details
+locals {
+  project_name = "Andrew"       # Define a local variable for the project name
+}
+
+# Define an AWS EC2 instance resource with its properties
+resource "aws_instance" "my_server" {
+  ami           = "ami-0453ec754f44f9a4a" # Specify the AMI to use for the instance
+  instance_type = var.instance_type       # Use the value of instance_type variable
+
+  # Define tags for the instance
+  tags = {
+    Name = "Myserver-${local.project_name}" # Tag the instance with the name combining "Myserver" and project_name
+  }
+}
+
+# Output the public IP address of the created EC2 instance
+output "instance_ip_addr" { 
+  value = aws_instance.my_server.public_ip # Output the public IP of the EC2 instance
+}
+
+# Terraform commands for validation, planning, and managing infrastructure
+terraform validate       # Check the syntax and validity of the Terraform files
+terraform plan           # Generate and show an execution plan
+terraform refresh        # Update the state file with real-world infrastructure
+terraform output         # Display the outputs again
+
+###############################################
+# HashiCorp Terraform Modules
+###############################################
+
+# Main Terraform configuration block to specify required providers
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"  # Specify the AWS provider source
+      version = "5.78.0"         # Specify the version of the AWS provider
+    }
+  }
+}
+
+# Define the AWS provider and its configuration
+provider "aws" {
+  profile = "default"           # Use the default AWS CLI profile
+  region  = "us-east-1"         # Set the default AWS region
+}
+
+# Define another AWS provider configuration with a region alias
+#provider "aws" {
+#  profile = "default"           # Use the default AWS CLI profile
+#  region  = "eu-west-1"         # Set the AWS region to EU (Ireland)
+#  alias   = "eu"                # Alias for this provider configuration
+#}
+
+# Define a variable for the EC2 instance type
+variable "instance_type" {
+  description = "The EC2 instance type"
+  type        = string
+  default     = "t2.micro" # Default value provided here
+} 
+# Define local variables for project-specific details
+locals {
+  project_name = "Andrew"       # Define a local variable for the project name
+}
+
+# Define an AWS EC2 instance resource with its properties
+resource "aws_instance" "my_server" {
+  ami           = "ami-0453ec754f44f9a4a" # Specify the AMI to use for the instance
+  instance_type = var.instance_type       # Use the value of instance_type variable
+
+  # Define tags for the instance
+  tags = {
+    Name = "Myserver-${local.project_name}" # Tag the instance with the name combining "Myserver" and project_name
+  }
+}
+
+# Use a module to create a VPC in the EU region
+module "vpc" {
+  source = "terraform-aws-modules/vpc/aws" # Source of the VPC module
+  #providers = {
+   # aws = aws.eu                           # Specify the provider alias for the EU region
+  #}
+
+  name = "my-vpc"                          # Name of the VPC
+  cidr = "10.0.0.0/16"                     # CIDR block for the VPC
+
+  # Availability zones and subnet configurations
+  azs             = ["us-east-1a", "us-east-1b", "us-east-1c"] # Availability zones
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"] # Private subnets
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"] # Public subnets
+
+  enable_nat_gateway = true               # Enable NAT gateway
+  enable_vpn_gateway = true               # Enable VPN gateway
+
+  tags = {                                # Tags for the VPC
+    Terraform    = "true"
+    Environment = "dev"
+  }
+}
+
+# Output the public IP address of the created EC2 instance
+output "instance_ip_addr" { 
+  value = aws_instance.my_server.public_ip # Output the public IP of the EC2 instance
+}
+
+# Terraform commands for validation, planning, and applying changes
+terraform init
+terraform validate       # Check the syntax and validity of the Terraform files
+terraform plan           # Generate and show an execution plan
+terraform apply -auto-approve # Apply the plan and auto-approve
+
+###############################################
+# HashiCorp Terraform Divide Files
+###############################################
+
+# Instructions for dividing the configuration into modular files:
+
+1. **Create providers file "providers.tf"**
+   # Copy the providers from main.tf and define them here.
+
+2. **Create variables file "variables.tf"**
+   # Copy the variables from main.tf and define them here.
+
+3. **Create outputs file "outputs.tf"**
+   # Define output variables in this file.
+
+4. **Create aws.tf**
+   # Define AWS resources and modules in this file.
+
+5. **Main file ("main.tf")**
+   # Main configuration file containing core Terraform block and commands.
+
+###############################################
+# HashiCorp Terraform Destroy
+###############################################
+
+# Command to destroy the Terraform-managed infrastructure
+terraform apply -destroy # Destroy resources described in the configuration
+
+###############################################
+# HashiCorp Terraform Cloud
+###############################################
+
+# Instructions to set up Terraform Cloud
+**** Open an account on Terraform Cloud ****
+# After logging in, follow these steps:
+1. Create an organization.
+2. Create a new workspace:
+   - Select the "CLI-driven workflow."
+   - Name the workspace: `getting-started`.
+   - Create the workspace.
+
+# **Update `main.tf` to include the backend configuration for Terraform Cloud**
+terraform {
+  backend "remote" {
+    hostname     = "app.terraform.io"  # URL of Terraform Cloud
+    organization = "assulai-test"           # Organization name in Terraform Cloud
+
+    workspaces { 
+      name = "getting-started"         # Name of the workspace to use
+    }
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"        # Specify the AWS provider source
+      version = "5.78.0"               # Define the provider version
+    }
+  }
+}
+
+# Define local variables for project-specific details
+locals {
+  project_name = "Andrew"              # Project name to be used in resource tags
+}
+
+# Steps to authenticate Terraform with Terraform Cloud
+***
+1. Run `terraform login` in the terminal.
+   - Accept by typing `yes`.
+   - Create an API token with the description "Terraform Associate."
+    profile ----> setting ---> Tokens ---> create an API token --->    description= terraform cloud test , expiration=30 days ---> generate token
+   - Copy the API token when prompted and paste it in the terminal.
+2. Initialize the Terraform configuration:
+   terraform init   # Initialize the Terraform configuration with the new backend
+   yes              # Confirm initialization
+# **Log in to Terraform Cloud**
+- Navigate to the Terraform Cloud dashboard and refresh the page.
+- Under `States`, view the uploaded state file.
+
+# **Back in Visual Studio Code**
+- Delete the local `terraform.tfstate` file:
+   rm terraform.tfstate  # Ensure state is fully managed in Terraform Cloud
+
+# **Set Variables in Terraform Cloud**
+projects ---> Default project ---> Workspaces ---> select "workspace name" ---> variables---> Workspace Variables --->Add Variables
+1. select to Add Terraform variables:
+   - Key: `instance_type`, Value: `t2.micro`
+     Description: The size of the EC2 instance.
+   - Save the variable.
+
+2. select Add Environment variables:
+   - Key: `AWS_ACCESS_KEY_ID`, Value: `<your-aws-access-key-id>` (Mark as sensitive)
+     Description: AWS Access Key ID.
+   - Save the variable.
+   - Key: `AWS_SECRET_ACCESS_KEY`, Value: `<your-aws-secret-access-key>` (Mark as sensitive)
+     Description: AWS Secret Access Key.
+   - Save the variable.
+   - Key: `AWS_DEFAULT_REGION`, Value: `us-east-1`
+     Description: Default AWS Region.
+   - Save the variable.
+
+# Apply the changes:
+terraform apply         # Apply the Terraform configuration
+yes                     # Confirm apply
+
+# Destroy the resources:
+terraform destroy       # Remove all resources managed by this configuration
+yes                     # Confirm destruction
+
+# **Modify and Test Configuration**
+1. Comment out the VPC module in the configuration.
+2. Apply the changes again:
+   terraform apply      # Apply the Terraform configuration without the VPC
+   yes                  # Confirm apply
+
+# **Monitor Terraform Cloud**
+- In the Terraform Cloud dashboard:
+  - Go to `getting-started -> Run` to see the plan or apply process.
+  - Under `States`, view the state history.
+  - In the `Overview` tab, review recent activity and logs.
+
+# **Back in Visual Studio Code**
+- Destroy all resources to clean up:
+   terraform apply -destroy -auto-approve  # Destroy resources without further confirmation
+# **delete workspaces
+projects ---> Default project ---> Workspaces ---> select "workspace name" --->settings --->Destruction and Deletion ---> Delete Workspace ---> Delete from HCP Terraform --->
+
+
+******Remote-Exec Example******
+terraform apply -replace="aws_instance.my_server"
+terraform apply -destory -auto-approve 
+
+

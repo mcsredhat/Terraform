@@ -1,0 +1,1130 @@
+#### **Basic**: Deploy an RDS Instance
+hcl
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create a subnet group for the RDS instance
+resource "aws_db_subnet_group" "example" {
+  name       = "example-subnet-group"           # Name of the subnet group
+  subnet_ids = ["subnet-12345abc", "subnet-67890def"] # Replace with your subnet IDs
+
+  tags = {
+    Name = "Example-DB-Subnet-Group"
+  }
+}
+
+# Deploy a simple RDS instance
+resource "aws_db_instance" "example_rds" {
+  allocated_storage    = 20                     # Storage size in GB
+  engine               = "mysql"                # Database engine
+  engine_version       = "8.0"                  # Engine version
+  instance_class       = "db.t3.micro"          # Instance type
+  name                 = "exampledb"            # Database name
+  username             = "admin"                # Master username
+  password             = "adminpassword"        # Master password (replace with a strong password)
+  db_subnet_group_name = aws_db_subnet_group.example.name # Reference the subnet group
+  skip_final_snapshot  = true                   # Skip final snapshot during deletion
+
+  tags = {
+    Name = "Example-RDS-Basic"
+  }
+}
+
+# Output the RDS endpoint
+output "rds_endpoint" {
+  value = aws_db_instance.example_rds.endpoint
+}
+--------------------------------------------------------
+Here is a Terraform configuration with **four basic AWS RDS examples**, demonstrating variables, loops, and conditionals. Each example is carefully commented for clarity.
+
+
+### **Variables**
+Define reusable and configurable input variables.
+
+
+# Define the RDS engine type (e.g., MySQL, PostgreSQL)
+variable "rds_engine" {
+  description = "Database engine for RDS instances"
+  type        = string
+  default     = "mysql"
+}
+
+# Define the database engine version
+variable "engine_version" {
+  description = "Version of the database engine"
+  type        = string
+  default     = "8.0"
+}
+
+# Number of RDS instances to create
+variable "rds_instance_count" {
+  description = "Number of RDS instances to create"
+  type        = number
+  default     = 1
+}
+
+# Master username for the RDS instance
+variable "master_username" {
+  description = "Master username for the database"
+  type        = string
+  default     = "admin"
+}
+
+# Master password for the RDS instance
+variable "master_password" {
+  description = "Master password for the database"
+  type        = string
+  default     = "password123"
+}
+
+# RDS instance class (e.g., db.t2.micro, db.t3.small)
+variable "instance_class" {
+  description = "Instance class for the RDS instance"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+# Enable backups flag
+variable "enable_backups" {
+  description = "Enable automatic backups for RDS instances"
+  type        = bool
+  default     = true
+}
+
+# Tags for all resources
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "Dev"
+    Project     = "BasicRDS"
+  }
+}
+
+
+---
+
+### **Example 1: Create a Simple RDS Instance**
+This example creates a single RDS instance with the specified engine and settings.
+
+
+# Create RDS instance
+resource "aws_db_instance" "basic_rds" {
+  count             = var.rds_instance_count # Create multiple instances if needed
+  identifier        = "rds-basic-${count.index}" # Unique identifier for each instance
+  allocated_storage = 20 # Storage size in GB
+  engine            = var.rds_engine # Use engine type from variable
+  engine_version    = var.engine_version # Use engine version from variable
+  instance_class    = var.instance_class # Use instance class from variable
+  username          = var.master_username # Master username for database
+  password          = var.master_password # Master password for database
+  publicly_accessible = false # Disable public access for security
+
+  tags = merge(var.tags, { # Merge common tags with instance-specific metadata
+    Name = "Basic-RDS-${count.index}"
+  })
+}
+### **Example 2: Enable Automatic Backups Conditionally**
+This example enables automatic backups based on the `enable_backups` variable.
+
+
+# RDS instance with optional backups
+resource "aws_db_instance" "rds_with_backups" {
+  count             = var.rds_instance_count # Create instances based on count
+  identifier        = "rds-backup-${count.index}" # Unique identifier for each instance
+  allocated_storage = 20 # Storage size in GB
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  # Enable backups conditionally
+  backup_retention_period = var.enable_backups ? 7 : 0 # Retain backups for 7 days if enabled
+  backup_window           = "01:00-02:00" # Preferred backup window (UTC)
+
+  tags = merge(var.tags, {
+    Name = "Backup-RDS-${count.index}"
+  })
+}
+### **Example 3: Create Multiple Instances with a Loop**
+This example uses a loop to create multiple RDS instances with unique identifiers.
+
+# Loop through multiple RDS instances
+resource "aws_db_instance" "multi_rds" {
+  count             = var.rds_instance_count # Create multiple instances
+  identifier        = "multi-rds-${count.index}" # Unique name for each instance
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  tags = merge(var.tags, {
+    Name = "Multi-RDS-${count.index}"
+  })
+}
+
+
+---
+
+### **Example 4: Use Provisioners for Post-Deployment Actions**
+This example uses a local-exec provisioner to log RDS instance information after creation.
+
+
+# RDS instance with provisioner
+resource "aws_db_instance" "rds_with_provisioner" {
+  count             = var.rds_instance_count
+  identifier        = "provisioned-rds-${count.index}"
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  # Provisioner to log instance details after creation
+  provisioner "local-exec" {
+    command = "echo 'RDS instance ${self.identifier} created with endpoint ${self.endpoint}'"
+  }
+
+  tags = merge(var.tags, {
+    Name = "Provisioned-RDS-${count.index}"
+  })
+}
+
+### **Apply the Configuration**
+
+1. **Initialize Terraform**:
+   bash
+   terraform init
+   
+
+2. **Preview the Plan**:
+   bash
+   terraform plan
+   
+
+3. **Apply the Configuration**:
+   bash
+   terraform apply
+   
+
+-------------------------------------------------------
+
+#### **Intermediate**: Configure Backup and Multi-AZ
+hcl
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create a subnet group for the RDS instance
+resource "aws_db_subnet_group" "example" {
+  name       = "example-subnet-group"
+  subnet_ids = ["subnet-12345abc", "subnet-67890def"] # Replace with your subnet IDs
+
+  tags = {
+    Name = "Example-DB-Subnet-Group"
+  }
+}
+
+# Deploy an RDS instance with backup and Multi-AZ
+resource "aws_db_instance" "example_rds" {
+  allocated_storage       = 50                  # Storage size in GB
+  engine                  = "postgres"          # Database engine
+  engine_version          = "13.4"              # Engine version
+  instance_class          = "db.t3.medium"      # Instance type
+  name                    = "exampledb"         # Database name
+  username                = "admin"             # Master username
+  password                = "securepassword"    # Master password (replace with a strong password)
+  db_subnet_group_name    = aws_db_subnet_group.example.name
+  multi_az                = true                # Enable Multi-AZ deployments
+  backup_retention_period = 7                   # Retain backups for 7 days
+  backup_window           = "02:00-03:00"       # Backup window (UTC)
+
+  tags = {
+    Name = "Example-RDS-Intermediate"
+  }
+}
+
+# Output the RDS endpoint and backup configuration
+output "rds_endpoint" {
+  value = aws_db_instance.example_rds.endpoint
+}
+
+output "backup_retention" {
+  value = aws_db_instance.example_rds.backup_retention_period
+}
+-------------------------------------------------------
+Below are **four intermediate AWS RDS examples** using Terraform. These examples demonstrate more advanced features such as parameter groups, subnet groups, enhanced monitoring, and cross-region replication, all while leveraging variables, loops, and conditionals.
+
+---
+
+### **Variables**
+Define reusable and configurable input variables.
+
+
+# General variables
+variable "rds_engine" {
+  description = "Database engine for RDS instances"
+  type        = string
+  default     = "postgres"
+}
+
+variable "engine_version" {
+  description = "Version of the database engine"
+  type        = string
+  default     = "13.4"
+}
+
+variable "rds_instance_count" {
+  description = "Number of RDS instances to create"
+  type        = number
+  default     = 2
+}
+
+variable "master_username" {
+  description = "Master username for the database"
+  type        = string
+  default     = "admin"
+}
+
+variable "master_password" {
+  description = "Master password for the database"
+  type        = string
+  default     = "securepassword123"
+}
+
+variable "instance_class" {
+  description = "Instance class for the RDS instance"
+  type        = string
+  default     = "db.t3.medium"
+}
+
+variable "enable_enhanced_monitoring" {
+  description = "Enable enhanced monitoring for RDS instances"
+  type        = bool
+  default     = true
+}
+
+variable "enable_multi_az" {
+  description = "Enable Multi-AZ deployment for high availability"
+  type        = bool
+  default     = false
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "Staging"
+    Project     = "IntermediateRDS"
+  }
+}
+
+
+---
+
+### **Example 1: RDS with Parameter Groups**
+This example creates an RDS instance and attaches a custom parameter group for fine-tuning database settings.
+
+
+# Custom Parameter Group
+resource "aws_db_parameter_group" "custom_params" {
+  name        = "custom-params"
+  family      = "${var.rds_engine}${var.engine_version}" # Combine engine and version
+  description = "Custom parameter group for RDS"
+
+  parameters = [
+    {
+      name  = "max_connections"
+      value = "150"
+      apply_method = "pending-reboot"
+    },
+    {
+      name  = "log_statement"
+      value = "all"
+      apply_method = "immediate"
+    }
+  ]
+
+  tags = var.tags
+}
+
+# RDS Instance with Parameter Group
+resource "aws_db_instance" "rds_with_params" {
+  count             = var.rds_instance_count
+  identifier        = "rds-params-${count.index}"
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  parameter_group_name = aws_db_parameter_group.custom_params.name # Attach custom parameter group
+
+  tags = merge(var.tags, {
+    Name = "RDS-Params-${count.index}"
+  })
+}
+
+
+---
+
+### **Example 2: Subnet Group for RDS**
+This example creates a database subnet group for deploying RDS in specific private subnets.
+
+
+# Subnet Group for RDS
+resource "aws_db_subnet_group" "db_subnet" {
+  name       = "db-subnet-group"
+  subnet_ids = ["subnet-12345abc", "subnet-67890def"] # Replace with actual subnet IDs
+  description = "Subnet group for RDS instances"
+
+  tags = var.tags
+}
+
+# RDS Instance with Subnet Group
+resource "aws_db_instance" "rds_with_subnet" {
+  count             = var.rds_instance_count
+  identifier        = "rds-subnet-${count.index}"
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  db_subnet_group_name = aws_db_subnet_group.db_subnet.name # Attach subnet group
+
+  tags = merge(var.tags, {
+    Name = "RDS-Subnet-${count.index}"
+  })
+}
+```
+
+---
+
+### **Example 3: Enhanced Monitoring**
+This example enables enhanced monitoring for RDS instances to collect detailed metrics.
+
+
+# IAM Role for Enhanced Monitoring
+resource "aws_iam_role" "enhanced_monitoring_role" {
+  name = "rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Attach Policy for Monitoring Role
+resource "aws_iam_role_policy_attachment" "monitoring_role_policy" {
+  role       = aws_iam_role.enhanced_monitoring_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# RDS Instance with Enhanced Monitoring
+resource "aws_db_instance" "rds_with_monitoring" {
+  count             = var.rds_instance_count
+  identifier        = "rds-monitoring-${count.index}"
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  monitoring_role_arn    = var.enable_enhanced_monitoring ? aws_iam_role.enhanced_monitoring_role.arn : null
+  monitoring_interval    = var.enable_enhanced_monitoring ? 60 : 0 # Metrics collection interval in seconds
+
+  tags = merge(var.tags, {
+    Name = "RDS-Monitoring-${count.index}"
+  })
+}
+
+### **Example 4: Cross-Region Read Replica**
+This example demonstrates creating a cross-region read replica for disaster recovery.
+
+
+# Source RDS Instance
+resource "aws_db_instance" "source_rds" {
+  identifier        = "source-rds"
+  allocated_storage = 20
+  engine            = var.rds_engine
+  engine_version    = var.engine_version
+  instance_class    = var.instance_class
+  username          = var.master_username
+  password          = var.master_password
+  publicly_accessible = false
+
+  tags = merge(var.tags, {
+    Name = "Source-RDS"
+  })
+}
+
+# Cross-Region Read Replica
+resource "aws_db_instance" "cross_region_replica" {
+  count                = var.enable_multi_az ? 1 : 0 # Create replica only if Multi-AZ is enabled
+  identifier           = "replica-rds"
+  allocated_storage    = 20
+  engine               = aws_db_instance.source_rds.engine
+  instance_class       = var.instance_class
+  publicly_accessible  = false
+  replicate_source_db  = aws_db_instance.source_rds.id # Source RDS ID for replication
+
+  tags = merge(var.tags, {
+    Name = "Cross-Region-Replica"
+  })
+}
+```
+
+---
+
+### **Apply the Configuration**
+
+1. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+2. **Preview the Plan**:
+   ```bash
+   terraform plan
+   ```
+
+3. **Apply the Configuration**:
+   ```bash
+   terraform apply
+   ```
+
+----------------------------------------------------------
+
+#### **Advanced**: Encrypt and Monitor RDS Instances
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create a subnet group for the RDS instance
+resource "aws_db_subnet_group" "example" {
+  name       = "example-subnet-group"
+  subnet_ids = ["subnet-12345abc", "subnet-67890def"] # Replace with your subnet IDs
+
+  tags = {
+    Name = "Example-DB-Subnet-Group"
+  }
+}
+
+# Deploy an encrypted RDS instance with CloudWatch monitoring
+resource "aws_db_instance" "example_rds" {
+  allocated_storage       = 100                 # Storage size in GB
+  engine                  = "mysql"             # Database engine
+  engine_version          = "8.0"               # Engine version
+  instance_class          = "db.t3.medium"      # Instance type
+  name                    = "exampledb"         # Database name
+  username                = "admin"             # Master username
+  password                = "securepassword"    # Master password
+  db_subnet_group_name    = aws_db_subnet_group.example.name
+  multi_az                = true                # Enable Multi-AZ deployments
+  backup_retention_period = 7                   # Retain backups for 7 days
+  storage_encrypted       = true                # Enable encryption
+  kms_key_id              = "arn:aws:kms:us-west-2:123456789012:key/your-kms-key-id" # Replace with your KMS key ARN
+  monitoring_interval     = 60                  # Enable CloudWatch monitoring every 60 seconds
+  monitoring_role_arn     = "arn:aws:iam::123456789012:role/your-monitoring-role"   # Replace with your IAM role ARN
+
+  tags = {
+    Name = "Example-RDS-Advanced"
+  }
+}
+
+# Output the RDS endpoint, encryption, and monitoring details
+output "rds_endpoint" {
+  value = aws_db_instance.example_rds.endpoint
+}
+
+output "encryption_status" {
+  value = aws_db_instance.example_rds.storage_encrypted
+}
+
+output "monitoring_interval" {
+  value = aws_db_instance.example_rds.monitoring_interval
+}
+---
+
+## **1. Basic Example: Deploy an RDS Instance**
+
+This example creates a basic AWS RDS instance using Terraform.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Create a security group to allow database access
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-security-group"  # Name of the security group
+  description = "Allow inbound traffic to RDS"
+
+  # Allow inbound traffic on port 3306 (MySQL)
+  ingress {
+    from_port   = 3306              # MySQL default port
+    to_port     = 3306              # MySQL default port
+    protocol    = "tcp"             # Protocol: TCP
+    cidr_blocks = ["0.0.0.0/0"]     # Allow all IPs (not secure for production)
+  }
+
+  # Allow all outbound traffic
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"              # All protocols
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "RDS-Security-Group"  # Tag the security group
+  }
+}
+
+# Create an RDS instance
+resource "aws_db_instance" "basic_rds" {
+  allocated_storage    = 20                    # Storage size in GB
+  engine               = "mysql"               # Database engine (MySQL)
+  engine_version       = "8.0"                 # MySQL version
+  instance_class       = "db.t2.micro"         # Instance type (free tier eligible)
+  name                 = "mydatabase"          # Database name
+  username             = "admin"               # Master username
+  password             = "SuperSecurePass123"  # Master password (use secure methods for production)
+  parameter_group_name = "default.mysql8.0"    # Default parameter group
+  skip_final_snapshot  = true                  # Do not create a snapshot on deletion
+
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]  # Attach the security group
+
+  tags = {
+    Name = "Basic-RDS"  # Tag for the RDS instance
+  }
+}
+
+
+### **Explanation:**
+1. Defines an **AWS provider** in `us-east-1`.
+2. Creates a **security group** to allow MySQL (port 3306) traffic.
+3. Deploys a **basic RDS instance** with MySQL engine:
+   - **20 GB storage**
+   - **db.t2.micro** instance (free tier)
+   - **Username and password** (for database access)
+4. Skips the final snapshot upon deletion.
+
+---
+
+## **2. Intermediate Example: Configure Backup and Multi-AZ Deployment**
+
+This example extends the basic setup by enabling **automated backups** and **Multi-AZ deployment** for high availability.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Create a security group for RDS
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-security-group"
+  description = "Allow inbound traffic to RDS"
+
+  ingress {
+    from_port   = 3306              # MySQL default port
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]     # Allow all IPs (update for security in production)
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "RDS-Security-Group"
+  }
+}
+
+# Create an RDS instance with backups and Multi-AZ
+resource "aws_db_instance" "intermediate_rds" {
+  allocated_storage      = 50                    # Storage size in GB
+  engine                 = "mysql"               # Database engine
+  engine_version         = "8.0"
+  instance_class         = "db.t3.small"         # Instance type
+  name                   = "mydatabase"          # Database name
+  username               = "admin"               # Master username
+  password               = "SuperSecurePass123"  # Master password
+  parameter_group_name   = "default.mysql8.0"
+  multi_az               = true                  # Enable Multi-AZ deployment
+  backup_retention_period = 7                    # Retain backups for 7 days
+  backup_window          = "03:00-04:00"         # Backup window
+  skip_final_snapshot    = false                 # Create a final snapshot on deletion
+
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]  # Attach the security group
+
+  tags = {
+    Name = "Intermediate-RDS"  # Tag for the RDS instance
+  }
+}
+
+
+---
+
+## **3. Advanced Example: Encrypt and Monitor RDS Instances**
+
+This example adds **encryption** at rest and enables **CloudWatch monitoring** for enhanced visibility.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Create a security group for RDS
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-security-group"
+  description = "Allow inbound traffic to RDS"
+
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow all IPs (adjust for production security)
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "RDS-Security-Group"
+  }
+}
+
+# Create an RDS instance with encryption and monitoring
+resource "aws_db_instance" "advanced_rds" {
+  allocated_storage           = 100                   # Storage size in GB
+  engine                      = "mysql"
+  engine_version              = "8.0"
+  instance_class              = "db.t3.medium"        # Instance type
+  name                        = "mydatabase"
+  username                    = "admin"
+  password                    = "SuperSecurePass123"
+  parameter_group_name        = "default.mysql8.0"
+  multi_az                    = true                  # Enable Multi-AZ
+  storage_encrypted           = true                 # Enable encryption at rest
+  backup_retention_period     = 7                    # Retain backups for 7 days
+  monitoring_interval         = 60                   # Enable enhanced monitoring (every 60 seconds)
+  monitoring_role_arn         = aws_iam_role.rds_monitoring.arn  # IAM role for monitoring
+  performance_insights_enabled = true                # Enable Performance Insights
+
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+
+  tags = {
+    Name = "Advanced-RDS"
+  }
+}
+
+# Create an IAM role for RDS enhanced monitoring
+resource "aws_iam_role" "rds_monitoring" {
+  name = "rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Attach the AmazonRDSMonitoringRole policy to the IAM role
+resource "aws_iam_role_policy_attachment" "rds_monitoring_policy" {
+  role       = aws_iam_role.rds_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+
+
+
+=============================================================
+### **Terraform RDS Examples with Variables, Loops, and Conditions**
+
+# Define variables for configuration
+variable "region" {
+  description = "AWS region to deploy resources" # Specify the AWS region where resources will be deployed
+  type        = string
+  default     = "us-west-2" # Default AWS region
+}
+
+variable "db_names" {
+  description = "List of database names for different environments" # Define the database names for different environments
+  type        = list(string)
+  default     = ["basic-db", "intermediate-db", "advanced-db"] # List of default database names
+}
+
+variable "instance_classes" {
+  description = "Instance classes for different RDS instances" # Specify the instance types for the RDS instances
+  type        = list(string)
+  default     = ["db.t2.micro", "db.t3.small", "db.t3.medium"] # List of default instance classes
+}
+
+variable "enable_multi_az" {
+  description = "Flag to enable Multi-AZ deployment for RDS instances" # Determine whether Multi-AZ deployment is enabled
+  type        = bool
+  default     = true # Default to enabling Multi-AZ deployment
+}
+
+variable "backup_retention_period" {
+  description = "Retention period for backups" # Specify how many days to retain backups
+  type        = number
+  default     = 7 # Default backup retention period is 7 days
+}
+
+variable "kms_key_arn" {
+  description = "KMS key ARN for encryption" # Define the KMS key ARN for enabling encryption
+  type        = string
+  default     = "arn:aws:kms:us-west-2:123456789012:key/example-key" # Replace with your KMS key ARN
+}
+
+variable "monitoring_role_arn" {
+  description = "IAM Role ARN for enhanced monitoring" # Specify the IAM role ARN for monitoring
+  type        = string
+  default     = "arn:aws:iam::123456789012:role/example-monitoring-role" # Replace with your IAM role ARN
+}
+
+# AWS Provider Configuration
+provider "aws" {
+  region = var.region # Use the AWS region specified in the variable
+}
+
+# Create Security Group for RDS instances
+resource "aws_security_group" "rds_sg" {
+  name        = "rds-security-group" # Name of the security group
+  description = "Allow inbound traffic to RDS instances" # Description of the security group
+
+  ingress {
+    from_port   = 3306 # Allow inbound traffic on port 3306 (MySQL default port)
+    to_port     = 3306
+    protocol    = "tcp" # Use TCP protocol
+    cidr_blocks = ["0.0.0.0/0"] # Allow traffic from all IPs (not recommended for production)
+  }
+
+  egress {
+    from_port   = 0 # Allow all outbound traffic
+    to_port     = 0
+    protocol    = "-1" # All protocols
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "RDS-Security-Group" # Add a name tag for identification
+  }
+}
+
+# Create Subnet Group for RDS instances
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "rds-subnet-group" # Name of the subnet group
+  subnet_ids = ["subnet-12345abc", "subnet-67890def"] # List of subnet IDs for the subnet group
+
+  tags = {
+    Name = "RDS-Subnet-Group" # Add a name tag for identification
+  }
+}
+
+# Create RDS Instances using a loop
+resource "aws_db_instance" "rds_instances" {
+  for_each = { for index, name in var.db_names : index => name } # Loop through database names to create multiple instances
+
+  allocated_storage       = each.key == 2 ? 100 : (each.key == 1 ? 50 : 20) # Allocate storage based on the instance type
+  engine                  = "mysql" # Use MySQL as the database engine
+  engine_version          = "8.0" # Specify the MySQL version
+  instance_class          = var.instance_classes[each.key] # Use the instance class from the input variable
+  name                    = each.value # Set the database name
+  username                = "admin" # Master username for the database
+  password                = "SuperSecurePass123" # Master password (ensure secure handling for production)
+  db_subnet_group_name    = aws_db_subnet_group.rds_subnet_group.name # Associate the RDS instance with the subnet group
+  multi_az                = each.key == 0 ? false : var.enable_multi_az # Enable Multi-AZ for intermediate and advanced instances
+  storage_encrypted       = each.key == 2 ? true : false # Enable encryption only for advanced instances
+  kms_key_id              = each.key == 2 ? var.kms_key_arn : null # Apply the KMS key for advanced instances
+  monitoring_interval     = each.key == 2 ? 60 : null # Enable enhanced monitoring for advanced instances
+  monitoring_role_arn     = each.key == 2 ? var.monitoring_role_arn : null # Attach the monitoring role for advanced instances
+  backup_retention_period = var.backup_retention_period # Set the backup retention period
+  backup_window           = "02:00-03:00" # Specify the backup window
+  skip_final_snapshot     = each.key == 0 ? true : false # Skip the final snapshot only for basic instances
+
+  vpc_security_group_ids = [aws_security_group.rds_sg.id] # Attach the security group to the RDS instance
+
+  tags = {
+    Name = each.value # Tag the instance with its name
+  }
+}
+
+# Outputs for RDS instances
+output "rds_endpoints" {
+  description = "Endpoints for all RDS instances" # Provide the endpoints of all created RDS instances
+  value       = [for instance in aws_db_instance.rds_instances : instance.endpoint] # Output the endpoint for each instance
+}
+
+output "rds_backup_retention" {
+  description = "Backup retention periods for RDS instances" # Provide the backup retention periods for all instances
+  value       = [for instance in aws_db_instance.rds_instances : instance.backup_retention_period] # Output the retention periods
+}
+
+output "rds_encryption_status" {
+  description = "Encryption status for RDS instances" # Provide the encryption status for all instances
+  value       = [for instance in aws_db_instance.rds_instances : instance.storage_encrypted] # Output the encryption status for each instance
+}
+----------------------------------------------------------
+Below are **four advanced AWS RDS examples** using Terraform. These configurations demonstrate complex features such as Aurora clusters, IAM authentication, data encryption, and lifecycle rules for advanced RDS use cases. Each example is explained with detailed comments.
+
+---
+
+### **Variables**
+Define reusable and configurable input variables.
+
+
+variable "rds_engine" {
+  description = "Database engine (e.g., aurora-mysql, aurora-postgresql)"
+  type        = string
+  default     = "aurora-mysql"
+}
+
+variable "engine_version" {
+  description = "Version of the database engine"
+  type        = string
+  default     = "5.7.mysql_aurora.2.10.2"
+}
+
+variable "cluster_instance_count" {
+  description = "Number of instances in the Aurora cluster"
+  type        = number
+  default     = 2
+}
+
+variable "instance_class" {
+  description = "Instance class for RDS instances"
+  type        = string
+  default     = "db.r5.large"
+}
+
+variable "master_username" {
+  description = "Master username for the database"
+  type        = string
+  default     = "admin"
+}
+
+variable "master_password" {
+  description = "Master password for the database"
+  type        = string
+  default     = "securepassword123"
+}
+
+variable "enable_encryption" {
+  description = "Enable encryption at rest for RDS instances"
+  type        = bool
+  default     = true
+}
+
+variable "kms_key_arn" {
+  description = "KMS key ARN for encryption"
+  type        = string
+  default     = "arn:aws:kms:us-west-2:123456789012:key/example-key"
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "Production"
+    Project     = "AdvancedRDS"
+  }
+}
+```
+### **Example 1: Aurora Cluster with Multiple Instances**
+This example creates an Aurora cluster with a specified number of instances.
+
+# Aurora Cluster
+resource "aws_rds_cluster" "aurora_cluster" {
+  cluster_identifier = "aurora-cluster"
+  engine             = var.rds_engine
+  engine_version     = var.engine_version
+  master_username    = var.master_username
+  master_password    = var.master_password
+  storage_encrypted  = var.enable_encryption
+  kms_key_id         = var.enable_encryption ? var.kms_key_arn : null
+
+  tags = var.tags
+}
+
+# Aurora Cluster Instances
+resource "aws_rds_cluster_instance" "cluster_instances" {
+  count                = var.cluster_instance_count
+  identifier           = "aurora-instance-${count.index}"
+  cluster_identifier   = aws_rds_cluster.aurora_cluster.id
+  instance_class       = var.instance_class
+  publicly_accessible  = false
+
+  tags = merge(var.tags, {
+    Name = "Aurora-Instance-${count.index}"
+  })
+}
+```
+
+---
+
+### **Example 2: RDS with IAM Authentication**
+This example enables IAM database authentication.
+
+
+# RDS Instance with IAM Authentication
+resource "aws_db_instance" "iam_auth_rds" {
+  identifier            = "iam-auth-rds"
+  allocated_storage     = 100
+  engine                = var.rds_engine
+  engine_version        = var.engine_version
+  instance_class        = var.instance_class
+  username              = var.master_username
+  password              = var.master_password
+  publicly_accessible   = false
+  iam_database_authentication_enabled = true # Enable IAM authentication
+
+  tags = merge(var.tags, {
+    Name = "IAM-Auth-RDS"
+  })
+}
+
+# IAM Policy for RDS Access
+resource "aws_iam_policy" "rds_iam_policy" {
+  name        = "RDSIAMAccessPolicy"
+  description = "IAM Policy for accessing RDS with IAM authentication"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "rds-db:connect",
+        Resource = "arn:aws:rds-db:${data.aws_region.current.name}:123456789012:dbuser:${aws_db_instance.iam_auth_rds.resource_id}/${var.master_username}"
+      }
+    ]
+  })
+}
+```
+
+---
+
+### **Example 3: Cross-Region Disaster Recovery**
+This example creates an RDS instance and sets up cross-region read replication for disaster recovery.
+
+
+# Primary RDS Instance
+resource "aws_db_instance" "primary_rds" {
+  identifier            = "primary-rds"
+  allocated_storage     = 100
+  engine                = var.rds_engine
+  engine_version        = var.engine_version
+  instance_class        = var.instance_class
+  username              = var.master_username
+  password              = var.master_password
+  publicly_accessible   = false
+  multi_az              = true # Enable Multi-AZ for high availability
+
+  tags = merge(var.tags, {
+    Name = "Primary-RDS"
+  })
+}
+
+# Cross-Region Read Replica
+resource "aws_db_instance" "read_replica" {
+  identifier           = "read-replica"
+  replicate_source_db  = aws_db_instance.primary_rds.arn
+  instance_class       = var.instance_class
+  publicly_accessible  = false
+
+  tags = merge(var.tags, {
+    Name = "Cross-Region-Replica"
+  })
+}
+```
+### **Example 4: RDS with Lifecycle Rules**
+This example configures lifecycle rules to prevent accidental deletion.
+
+
+# RDS Instance with Lifecycle Rules
+resource "aws_db_instance" "lifecycle_rds" {
+  identifier            = "lifecycle-rds"
+  allocated_storage     = 100
+  engine                = var.rds_engine
+  engine_version        = var.engine_version
+  instance_class        = var.instance_class
+  username              = var.master_username
+  password              = var.master_password
+  publicly_accessible   = false
+
+  # Prevent accidental deletion
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "Lifecycle-RDS"
+  })
+}
+```
+
+---
+
+### **Apply the Configuration**
+
+1. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+2. **Preview the Plan**:
+   ```bash
+   terraform plan
+   ```
+
+3. **Apply the Configuration**:
+   ```bash
+   terraform apply
+   ```
+

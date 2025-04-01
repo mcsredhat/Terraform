@@ -1,0 +1,279 @@
+### **3. ECS/EKS**
+#### **Basic**: Deploy an ECS Cluster  
+hcl
+resource "aws_ecs_cluster" "example_cluster" {
+  name = "example-cluster"
+}
+
+
+#### **Intermediate**: Add a Task Definition  
+hcl
+resource "aws_ecs_task_definition" "example_task" {
+  family                   = "example-task"
+  container_definitions    = file("container_definitions.json")
+  requires_compatibilities = ["FARGATE"]
+  memory                   = "512"
+  cpu                      = "256"
+}
+
+
+---
+# **3. ECS/EKS**
+
+## **Basic**: Deploy a Simple ECS Cluster and Service
+
+hcl
+# Define AWS provider
+provider "aws" {
+  region = "us-east-1"
+}
+
+# Create an ECS Cluster
+resource "aws_ecs_cluster" "example_cluster" {
+  name = "example-ecs-cluster"  # Cluster name
+}
+
+# Define ECS Task Definition
+resource "aws_ecs_task_definition" "example_task" {
+  family                   = "example-task"
+  network_mode             = "bridge"
+  requires_compatibilities = ["EC2"]
+  container_definitions = jsonencode([
+    {
+      name  = "example-container",
+      image = "nginx",  # Use the NGINX image
+      cpu   = 256,
+      memory = 512,
+      essential = true
+    }
+  ])
+}
+
+# Create an ECS Service
+resource "aws_ecs_service" "example_service" {
+  name            = "example-ecs-service"
+  cluster         = aws_ecs_cluster.example_cluster.id
+  task_definition = aws_ecs_task_definition.example_task.arn
+  desired_count   = 2  # Number of tasks to run
+}
+
+
+---
+
+## **Intermediate**: Deploy ECS with Application Load Balancer (ALB)
+
+hcl
+# ALB setup for ECS
+resource "aws_lb" "ecs_alb" {
+  name               = "ecs-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.ecs_sg.id]
+  subnets            = ["subnet-12345", "subnet-67890"]  # Replace with subnet IDs
+}
+
+# ECS Service integrated with ALB
+resource "aws_ecs_service" "example_service" {
+  name            = "ecs-service"
+  cluster         = aws_ecs_cluster.example_cluster.id
+  task_definition = aws_ecs_task_definition.example_task.arn
+  desired_count   = 2
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.ecs_target_group.arn
+    container_name   = "example-container"
+    container_port   = 80
+  }
+}
+
+
+---
+
+## **3. ECS/EKS Advanced Examples**
+
+### **Advanced ECS**: Deploy ECS with Fargate, Application Load Balancer (ALB), and Auto-Scaling
+
+hcl
+# Define AWS provider
+provider "aws" {
+  region = "us-east-1" # AWS region to deploy resources
+}
+
+# Create an ECS cluster for Fargate
+resource "aws_ecs_cluster" "ecs_cluster" {
+  name = "advanced-ecs-cluster" # Name of the ECS cluster
+}
+
+# Create a security group for ALB and ECS tasks
+resource "aws_security_group" "ecs_sg" {
+  name        = "ecs-alb-sg"
+  description = "Allow HTTP traffic for ECS tasks"
+  vpc_id      = "vpc-123456" # Replace with your VPC ID
+
+  ingress {
+    description = "Allow HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Allow access from anywhere
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Create an Application Load Balancer
+resource "aws_lb" "ecs_alb" {
+  name               = "ecs-advanced-alb" # Name of the ALB
+  internal           = false             # Public ALB
+  load_balancer_type = "application"     # ALB type
+  security_groups    = [aws_security_group.ecs_sg.id] # Attach security group
+  subnets            = ["subnet-12345", "subnet-67890"] # Replace with public subnet IDs
+}
+
+# Create a target group for the ALB
+resource "aws_lb_target_group" "ecs_target_group" {
+  name        = "ecs-target-group"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = "vpc-123456" # Replace with your VPC ID
+  target_type = "ip"         # Use 'ip' for Fargate
+
+  health_check {
+    path                = "/"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 3
+    unhealthy_threshold = 2
+  }
+}
+
+# Create an ECS task definition using Fargate
+resource "aws_ecs_task_definition" "ecs_task" {
+  family                   = "advanced-task"
+  requires_compatibilities = ["FARGATE"] # Fargate compatibility
+  network_mode             = "awsvpc"    # Use awsvpc for Fargate
+  cpu                      = "512"       # CPU units
+  memory                   = "1024"      # Memory in MiB
+
+  container_definitions = jsonencode([
+    {
+      name      = "nginx-container"
+      image     = "nginx:latest" # Container image
+      essential = true
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+    }
+  ])
+}
+
+# Deploy ECS service with ALB integration and auto-scaling
+resource "aws_ecs_service" "ecs_service" {
+  name            = "advanced-ecs-service"
+  cluster         = aws_ecs_cluster.ecs_cluster.id
+  task_definition = aws_ecs_task_definition.ecs_task.arn
+  launch_type     = "FARGATE" # Use Fargate
+
+  network_configuration {
+    subnets         = ["subnet-12345", "subnet-67890"] # Public subnet IDs
+    security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.ecs_target_group.arn
+    container_name   = "nginx-container"
+    container_port   = 80
+  }
+
+  desired_count = 2 # Run 2 containers
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+}
+
+# Create auto-scaling for ECS service
+resource "aws_appautoscaling_target" "ecs_autoscale_target" {
+  max_capacity       = 5 # Maximum number of tasks
+  min_capacity       = 2 # Minimum number of tasks
+  resource_id        = "service/${aws_ecs_cluster.ecs_cluster.name}/${aws_ecs_service.ecs_service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_autoscale_policy" {
+  name               = "ecs-autoscale-policy"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_autoscale_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_autoscale_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_autoscale_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 75.0 # Scale when CPU exceeds 75%
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    scale_in_cooldown  = 60
+    scale_out_cooldown = 60
+  }
+}
+
+
+---
+
+### **Advanced EKS**: Create EKS Cluster with Managed Node Groups
+
+hcl
+# Define AWS provider
+provider "aws" {
+  region = "us-east-1" # AWS region
+}
+
+# Create an EKS cluster
+resource "aws_eks_cluster" "eks_cluster" {
+  name     = "advanced-eks-cluster" # EKS cluster name
+  role_arn = "arn:aws:iam::123456789012:role/EKSClusterRole" # IAM role for EKS
+
+  vpc_config {
+    subnet_ids = ["subnet-12345", "subnet-67890"] # Replace with subnet IDs
+  }
+
+  tags = {
+    Name = "AdvancedEKSCluster"
+  }
+}
+
+# Create an EKS node group
+resource "aws_eks_node_group" "eks_nodes" {
+  cluster_name    = aws_eks_cluster.eks_cluster.name
+  node_group_name = "eks-managed-nodes"
+  node_role_arn   = "arn:aws:iam::123456789012:role/EKSNodeRole" # IAM role for nodes
+
+  subnet_ids = ["subnet-12345", "subnet-67890"] # Subnet IDs for node group
+
+  scaling_config {
+    desired_size = 2 # Desired number of nodes
+    min_size     = 2 # Minimum nodes
+    max_size     = 5 # Maximum nodes
+  }
+
+  instance_types = ["t3.medium"] # EC2 instance type
+
+  tags = {
+    Name = "EKSNodeGroup"
+  }
+}
+
+
+---

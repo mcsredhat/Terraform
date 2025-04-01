@@ -1,0 +1,290 @@
+#### **CloudFormation Example**
+**Basic**: Deploy a CloudFormation Stack  
+**Intermediate**: Automate CloudFormation with Parameters  
+**Advanced**: Integrate CloudFormation with Terraform Outputs
+Here are three **CloudFormation examples** that progressively increase in complexity, using Terraform to deploy and manage CloudFormation stacks:
+
+1. **Basic**: Deploy a simple CloudFormation stack.  
+2. **Intermediate**: Automate the CloudFormation stack with parameters.  
+3. **Advanced**: Integrate CloudFormation with Terraform outputs for cross-resource management.
+
+Each line includes detailed comments for clarity.
+
+---
+
+## **1. Basic Example: Deploy a CloudFormation Stack**
+
+In this example, a CloudFormation stack is deployed to create a simple S3 bucket.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Deploy a CloudFormation stack to create an S3 bucket
+resource "aws_cloudformation_stack" "basic_stack" {
+  name = "basic-cloudformation-stack"  # Name of the CloudFormation stack
+
+  template_body = <<-EOF
+  {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "MyS3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": "my-basic-cloudformation-bucket-12345"
+        }
+      }
+    }
+  }
+  EOF
+
+  tags = {
+    Name        = "Basic-CloudFormation-Stack"  # Tag for the stack
+    Environment = "Development"                # Environment-specific tagging
+  }
+}
+
+
+### **Explanation:**
+1. Defines the **AWS provider** in the `us-east-1` region.
+2. Deploys a **CloudFormation stack** using the `aws_cloudformation_stack` resource.
+3. Embeds a **CloudFormation template** to create a simple S3 bucket:
+   - The bucket has a hardcoded name `my-basic-cloudformation-bucket-12345`.
+4. Tags the CloudFormation stack for easy identification.
+
+---
+
+## **2. Intermediate Example: Automate CloudFormation with Parameters**
+
+In this example, a CloudFormation template with parameters is used to create an EC2 instance.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Deploy a CloudFormation stack with parameters
+resource "aws_cloudformation_stack" "intermediate_stack" {
+  name = "intermediate-cloudformation-stack"  # Name of the CloudFormation stack
+
+  template_body = <<-EOF
+  {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+      "InstanceType": {
+        "Type": "String",
+        "Default": "t2.micro",
+        "Description": "EC2 instance type"
+      }
+    },
+    "Resources": {
+      "MyEC2Instance": {
+        "Type": "AWS::EC2::Instance",
+        "Properties": {
+          "InstanceType": { "Ref": "InstanceType" },
+          "ImageId": "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI ID (us-east-1)
+        }
+      }
+    }
+  }
+  EOF
+
+  # Pass parameter values into the CloudFormation template
+  parameters = {
+    InstanceType = "t2.micro"  # Specify the EC2 instance type
+  }
+
+  tags = {
+    Name        = "Intermediate-CloudFormation-Stack"
+    Environment = "Testing"
+  }
+}
+
+
+### **Explanation:**
+1. Deploys a **CloudFormation stack** to create an **EC2 instance**.
+2. The CloudFormation template includes a **parameter** (`InstanceType`) that allows customization of the EC2 instance type.
+3. Terraform passes the parameter value (`t2.micro`) using the `parameters` block.
+4. The **AMI ID** is hardcoded (Amazon Linux 2 for `us-east-1`).
+
+---
+
+## **3. Advanced Example: Integrate CloudFormation with Terraform Outputs**
+
+In this example, Terraform integrates outputs from CloudFormation to use them in other Terraform resources.
+
+hcl
+# Define the AWS provider
+provider "aws" {
+  region = "us-east-1"  # Specify the AWS region
+}
+
+# Deploy a CloudFormation stack to create an S3 bucket
+resource "aws_cloudformation_stack" "advanced_stack" {
+  name = "advanced-cloudformation-stack"  # Name of the CloudFormation stack
+
+  template_body = <<-EOF
+  {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "MyS3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": "my-advanced-cloudformation-bucket-12345"
+        }
+      }
+    },
+    "Outputs": {
+      "BucketNameOutput": {
+        "Description": "The name of the created S3 bucket",
+        "Value": { "Ref": "MyS3Bucket" }
+      }
+    }
+  }
+  EOF
+
+  tags = {
+    Name        = "Advanced-CloudFormation-Stack"
+    Environment = "Production"
+  }
+}
+
+# Use the CloudFormation stack output in another resource
+output "s3_bucket_name" {
+  value = aws_cloudformation_stack.advanced_stack.outputs["BucketNameOutput"]
+}
+
+# Use the S3 bucket name output to create a bucket object
+resource "aws_s3_object" "example_object" {
+  bucket = aws_cloudformation_stack.advanced_stack.outputs["BucketNameOutput"]  # Reference the output
+  key    = "example.txt"                     # Name of the object
+  content = "This is an example file."       # Content of the object
+  acl     = "private"                        # Access control for the object
+}
+
+
+### **Additional AWS Services** basic, intermediate, advanced 
+1. **Lambda**: Automate functions with triggers
+   - Example: Trigger a Lambda function on S3 upload
+2. **CloudWatch**: Monitor logs and metrics
+   - Example: Create an Alarm for EC2 instance usage
+3. **ECS/EKS**: Deploy containerized applications
+   - Example: Use Terraform to manage ECS services and tasks
+4. **Route 53**: DNS configuration
+   - Example: Register a domain and configure routing
+### **Additional AWS Services Examples with Terraform**
+
+---
+
+### **1. AWS Lambda**
+#### **Basic**: Deploy a Lambda Function  
+hcl
+provider "aws" {
+  region = "us-west-2"
+}
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_exec_role" {
+  name = "lambda-exec-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = { Service = "lambda.amazonaws.com" },
+      },
+    ],
+  })
+}
+
+# Attach necessary policies to the role
+resource "aws_iam_role_policy_attachment" "lambda_policy" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda function
+resource "aws_lambda_function" "example_lambda" {
+  function_name = "basic_lambda"
+  runtime       = "python3.9"               # Specify runtime
+  handler       = "lambda_function.lambda_handler"
+  role          = aws_iam_role.lambda_exec_role.arn
+  filename      = "lambda.zip"              # Path to zip file containing function code
+  source_code_hash = filebase64sha256("lambda.zip")
+
+  environment {
+    variables = {
+      ENV = "dev"
+    }
+  }
+}
+
+# Output Lambda function name
+output "lambda_function_name" {
+  value = aws_lambda_function.example_lambda.function_name
+}
+
+
+---
+
+#### **Intermediate**: Trigger Lambda on S3 Upload  
+hcl
+# Create an S3 bucket for triggering
+resource "aws_s3_bucket" "trigger_bucket" {
+  bucket = "example-trigger-bucket"
+  acl    = "private"
+}
+
+# S3 Bucket Notification
+resource "aws_s3_bucket_notification" "lambda_trigger" {
+  bucket = aws_s3_bucket.trigger_bucket.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.example_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+  }
+}
+
+
+---
+
+#### **Advanced**: Chain Lambda Functions  
+*This involves multiple Lambda functions with one triggering the other via SNS or Step Functions.*
+
+---
+
+### **2. CloudWatch**
+#### **Basic**: Monitor EC2 Logs  
+hcl
+# Create a CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "example_log_group" {
+  name              = "/ec2/logs"
+  retention_in_days = 7
+}
+
+
+---
+
+#### **Intermediate**: Create an Alarm for CPU Usage  
+hcl
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm" {
+  alarm_name          = "HighCPUAlarm"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    InstanceId = "i-1234567890abcdef"
+  }
+
+  alarm_actions = ["arn:aws:sns:us-west-2:123456789012:MyTopic"]
+}

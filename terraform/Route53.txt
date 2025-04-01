@@ -1,0 +1,139 @@
+### **4. Route 53**
+#### **Basic**: Register a Domain  
+hcl
+resource "aws_route53_zone" "example_zone" {
+  name = "example.com"
+}
+
+
+#### **Intermediate**: Configure DNS Routing  
+hcl
+resource "aws_route53_record" "example_record" {
+  zone_id = aws_route53_zone.example_zone.zone_id
+  name    = "www"
+  type    = "A"
+  ttl     = 300
+  records = ["192.0.2.1"]
+}
+
+# **4. Route 53**
+
+## **Basic**: Register a Domain and Create a Record
+
+hcl
+# Register a Route 53 Hosted Zone
+resource "aws_route53_zone" "example_zone" {
+  name = "example.com"  # Replace with your domain name
+}
+
+# Create a DNS A Record
+resource "aws_route53_record" "example_record" {
+  zone_id = aws_route53_zone.example_zone.zone_id
+  name    = "www.example.com"  # Subdomain name
+  type    = "A"
+  ttl     = 300                # TTL in seconds
+  records = ["1.2.3.4"]        # Replace with the IP address
+}
+
+
+---
+
+## **Intermediate**: Create Alias Record for S3 Static Website
+
+hcl
+# Create S3 bucket for static site hosting
+resource "aws_s3_bucket" "website_bucket" {
+  bucket = "my-website-bucket-12345"
+
+  website {
+    index_document = "index.html"
+  }
+}
+
+# Alias record pointing to S3 bucket
+resource "aws_route53_record" "alias_record" {
+  zone_id = aws_route53_zone.example_zone.zone_id
+  name    = "example.com"
+  type    = "A"
+
+  alias {
+    name                   = aws_s3_bucket.website_bucket.website_endpoint
+    zone_id                = aws_s3_bucket.website_bucket.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+## **4. Route 53 Advanced Examples**
+
+### **Advanced Route 53**: Configure Failover DNS Records
+
+hcl
+# Create a Route 53 hosted zone
+resource "aws_route53_zone" "primary_zone" {
+  name = "example.com" # Replace with your domain
+}
+
+# Create a primary A record for failover
+resource "aws_route53_record" "primary_record" {
+  zone_id = aws_route53_zone.primary_zone.zone_id
+  name    = "example.com"
+  type    = "A"
+
+  set_identifier = "primary"
+  failover_routing_policy {
+    type = "PRIMARY"
+  }
+
+  records = ["1.1.1.1"] # Replace with your primary server's IP
+  ttl     = 60
+}
+
+# Create a secondary A record for failover
+resource "aws_route53_record" "secondary_record" {
+  zone_id = aws_route53_zone.primary_zone.zone_id
+  name    = "example.com"
+  type    = "A"
+
+  set_identifier = "secondary"
+  failover_routing_policy {
+    type = "SECONDARY"
+  }
+
+  records = ["2.2.2.2"] # Replace with your secondary server's IP
+  ttl     = 60
+}
+
+
+---
+
+### **Advanced Route 53**: Latency-Based DNS Routing
+
+hcl
+# Create latency-based routing records
+resource "aws_route53_record" "latency_us" {
+  zone_id = aws_route53_zone.primary_zone.zone_id
+  name    = "example.com"
+  type    = "A"
+
+  set_identifier = "us-region"
+  latency_routing_policy {
+    region = "us-east-1"
+  }
+
+  records = ["1.1.1.1"] # Replace with your US-based server IP
+  ttl     = 60
+}
+
+resource "aws_route53_record" "latency_eu" {
+  zone_id = aws_route53_zone.primary_zone.zone_id
+  name    = "example.com"
+  type    = "A"
+
+  set_identifier = "eu-region"
+  latency_routing_policy {
+    region = "eu-west-1"
+  }
+
+  records = ["2.2.2.2"] # Replace with your EU-based server IP
+  ttl     = 60
+}

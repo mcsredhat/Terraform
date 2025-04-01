@@ -1,0 +1,885 @@
+Module 3: Network Security
+1. Security Groups
+   - Security group creation and management
+   - Inbound and outbound rules
+   - Security group best practices
+   - Using dynamic blocks in Terraform
+------------------------------------
+# Provider configuration: AWS
+provider "aws" {
+  region = var.aws_region  # Specify the AWS region for resource creation
+}
+
+# Input variable for AWS region
+variable "aws_region" {
+  description = "The AWS region where resources will be created"  # Description of the region variable
+  type        = string                                           # Data type of the variable
+  default     = "us-east-1"                                      # Default AWS region
+}
+
+# Input variables for CIDR blocks
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"  # CIDR block to define the VPC range
+  type        = string                   # Data type of the variable
+  default     = "10.0.0.0/16"            # Default CIDR block
+}
+
+variable "public_subnet_cidr" {
+  description = "CIDR block for the public subnet"  # CIDR for public subnet
+  type        = string                             # Data type of the variable
+  default     = "10.0.1.0/24"                      # Default CIDR for public subnet
+}
+
+variable "private_subnet_cidr" {
+  description = "CIDR block for the private subnet"  # CIDR for private subnet
+  type        = string                              # Data type of the variable
+  default     = "10.0.2.0/24"                       # Default CIDR for private subnet
+}
+
+# Create the VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr              # Assign the CIDR block to the VPC
+  enable_dns_support   = true                      # Enable DNS support
+  enable_dns_hostnames = true                      # Enable DNS hostnames for the VPC
+
+  tags = {
+    Name = "example-vpc"  # Tag for resource identification
+  }
+}
+
+# Create the public subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id        # Associate subnet with the created VPC
+  cidr_block              = var.public_subnet_cidr # Use the CIDR block for public subnet
+  map_public_ip_on_launch = true                   # Automatically assign public IPs to instances
+
+  tags = {
+    Name = "public-subnet"  # Tag for resource identification
+  }
+}
+
+# Create the private subnet
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id                    # Associate subnet with the created VPC
+  cidr_block = var.private_subnet_cidr            # Use the CIDR block for private subnet
+
+  tags = {
+    Name = "private-subnet"  # Tag for resource identification
+  }
+}
+
+# Create the internet gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id  # Attach the internet gateway to the VPC
+
+  tags = {
+    Name = "example-igw"  # Tag for resource identification
+  }
+}
+
+# Create the route table for the public subnet
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id  # Associate route table with the VPC
+
+  route {
+    cidr_block = "0.0.0.0/0"                     # Route all traffic to the internet
+    gateway_id = aws_internet_gateway.igw.id     # Use the internet gateway for routing
+  }
+
+  tags = {
+    Name = "public-route-table"  # Tag for resource identification
+  }
+}
+
+# Associate the public route table with the public subnet
+resource "aws_route_table_association" "public_association" {
+  subnet_id      = aws_subnet.public.id             # Public subnet ID
+  route_table_id = aws_route_table.public.id        # Route table ID for association
+}
+
+# Security Group for Public Subnet
+resource "aws_security_group" "public_sg" {
+  name        = "public-sg"                         # Name of the security group
+  description = "Allow HTTP and SSH access"         # Purpose of the security group
+  vpc_id      = aws_vpc.main.id                     # Associate with the VPC
+
+  # Inbound rules for public subnet
+  dynamic "ingress" {
+    for_each = [
+      { description = "Allow SSH", from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
+      { description = "Allow HTTP", from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }
+    ]
+    content {
+      description      = ingress.value.description  # Rule description
+      from_port        = ingress.value.from_port    # Starting port
+      to_port          = ingress.value.to_port      # Ending port
+      protocol         = ingress.value.protocol     # Protocol type
+      cidr_blocks      = ingress.value.cidr_blocks  # Allowed IPv4 ranges
+    }
+  }
+
+  # Outbound rule for public subnet
+  egress {
+    from_port   = 0                                # Allow all outbound traffic
+    to_port     = 0                                # Allow all outbound traffic
+    protocol    = "-1"                             # All protocols
+    cidr_blocks = ["0.0.0.0/0"]                    # Allow traffic to all destinations
+  }
+
+  tags = {
+    Name = "public-sg"  # Tag for resource identification
+  }
+}
+
+# Security Group for Private Subnet
+resource "aws_security_group" "private_sg" {
+  name        = "private-sg"                        # Name of the security group
+  description = "Allow internal communication"      # Purpose of the security group
+  vpc_id      = aws_vpc.main.id                     # Associate with the VPC
+
+  # Inbound rules for private subnet
+  dynamic "ingress" {
+    for_each = [
+      { description = "Allow traffic from public subnet", from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = [aws_subnet.public.cidr_block] }
+    ]
+    content {
+      description      = ingress.value.description  # Rule description
+      from_port        = ingress.value.from_port    # Starting port
+      to_port          = ingress.value.to_port      # Ending port
+      protocol         = ingress.value.protocol     # Protocol type
+      cidr_blocks      = ingress.value.cidr_blocks  # Allowed IPv4 ranges
+    }
+  }
+
+  # Outbound rule for private subnet
+  egress {
+    from_port   = 0                                 # Allow all outbound traffic
+    to_port     = 0                                 # Allow all outbound traffic
+    protocol    = "-1"                              # All protocols
+    cidr_blocks = ["0.0.0.0/0"]                     # Allow traffic to all destinations
+  }
+
+  tags = {
+    Name = "private-sg"  # Tag for resource identification
+  }
+}
+
+# Output variables
+output "vpc_id" {
+  description = "The ID of the created VPC"  # Description of the output variable
+  value       = aws_vpc.main.id             # Output the VPC ID
+}
+
+output "public_subnet_id" {
+  description = "The ID of the public subnet"  # Description of the output variable
+  value       = aws_subnet.public.id          # Output the public subnet ID
+}
+
+output "private_subnet_id" {
+  description = "The ID of the private subnet"  # Description of the output variable
+  value       = aws_subnet.private.id          # Output the private subnet ID
+}
+
+output "public_sg_id" {
+  description = "The ID of the public security group"  # Description of the output variable
+  value       = aws_security_group.public_sg.id       # Output the public security group ID
+}
+
+output "private_sg_id" {
+  description = "The ID of the private security group"  # Description of the output variable
+  value       = aws_security_group.private_sg.id       # Output the private security group ID
+}
+
+----------------------------------------
+2. Network ACLs
+   - NACL vs Security Groups
+   - Stateless filtering
+   - Rule number management
+   - NACL best practices
+-----------------------------------
+# Provider configuration: AWS
+provider "aws" {
+  region = var.aws_region  # Specify the AWS region
+}
+
+# Input variables for configuration
+variable "aws_region" {
+  description = "The AWS region where resources will be created"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "vpc_id" {
+  description = "The ID of the VPC where the NACL will be created"
+  type        = string
+}
+
+variable "public_subnet_id" {
+  description = "The ID of the public subnet to associate with the NACL"
+  type        = string
+}
+
+variable "private_subnet_id" {
+  description = "The ID of the private subnet to associate with the NACL"
+  type        = string
+}
+
+# Create a Network ACL for the public subnet
+resource "aws_network_acl" "public_nacl" {
+  vpc_id = var.vpc_id  # Attach NACL to the specified VPC
+
+  tags = {
+    Name = "public-nacl"  # Tag for resource identification
+  }
+}
+
+# Inbound rules for the public NACL
+resource "aws_network_acl_rule" "public_inbound" {
+  network_acl_id = aws_network_acl.public_nacl.id  # Associate rule with the public NACL
+  rule_number    = 100                             # Rule number for ordering
+  egress         = false                           # This is an inbound rule
+  protocol       = "6"                             # Protocol: 6 = TCP
+  rule_action    = "allow"                         # Allow traffic
+  cidr_block     = "0.0.0.0/0"                     # Allow traffic from any IP
+  from_port      = 80                              # Starting port (HTTP)
+  to_port        = 80                              # Ending port (HTTP)
+}
+
+# Outbound rules for the public NACL
+resource "aws_network_acl_rule" "public_outbound" {
+  network_acl_id = aws_network_acl.public_nacl.id  # Associate rule with the public NACL
+  rule_number    = 110                             # Rule number for ordering
+  egress         = true                            # This is an outbound rule
+  protocol       = "6"                             # Protocol: 6 = TCP
+  rule_action    = "allow"                         # Allow traffic
+  cidr_block     = "0.0.0.0/0"                     # Allow traffic to any IP
+  from_port      = 80                              # Starting port (HTTP)
+  to_port        = 80                              # Ending port (HTTP)
+}
+
+# Associate the public NACL with the public subnet
+resource "aws_network_acl_association" "public_nacl_assoc" {
+  subnet_id      = var.public_subnet_id            # Associate with the public subnet
+  network_acl_id = aws_network_acl.public_nacl.id  # Use the public NACL
+}
+
+# Create a Network ACL for the private subnet
+resource "aws_network_acl" "private_nacl" {
+  vpc_id = var.vpc_id  # Attach NACL to the specified VPC
+
+  tags = {
+    Name = "private-nacl"  # Tag for resource identification
+  }
+}
+
+# Inbound rules for the private NACL
+resource "aws_network_acl_rule" "private_inbound" {
+  network_acl_id = aws_network_acl.private_nacl.id  # Associate rule with the private NACL
+  rule_number    = 100                              # Rule number for ordering
+  egress         = false                            # This is an inbound rule
+  protocol       = "-1"                             # Protocol: -1 = All protocols
+  rule_action    = "allow"                          # Allow traffic
+  cidr_block     = "10.0.0.0/16"                    # Allow traffic within the VPC
+  from_port      = 0                                # Allow all ports
+  to_port        = 0                                # Allow all ports
+}
+
+# Outbound rules for the private NACL
+resource "aws_network_acl_rule" "private_outbound" {
+  network_acl_id = aws_network_acl.private_nacl.id  # Associate rule with the private NACL
+  rule_number    = 110                              # Rule number for ordering
+  egress         = true                             # This is an outbound rule
+  protocol       = "-1"                             # Protocol: -1 = All protocols
+  rule_action    = "allow"                          # Allow traffic
+  cidr_block     = "10.0.0.0/16"                    # Allow traffic within the VPC
+  from_port      = 0                                # Allow all ports
+  to_port        = 0                                # Allow all ports
+}
+
+# Associate the private NACL with the private subnet
+resource "aws_network_acl_association" "private_nacl_assoc" {
+  subnet_id      = var.private_subnet_id            # Associate with the private subnet
+  network_acl_id = aws_network_acl.private_nacl.id  # Use the private NACL
+}
+
+# Default deny rule for public NACL
+resource "aws_network_acl_rule" "public_default_deny" {
+  network_acl_id = aws_network_acl.public_nacl.id  # Apply to the public NACL
+  rule_number    = 200                             # High rule number for default deny
+  egress         = false                           # Inbound traffic
+  protocol       = "-1"                            # All protocols
+  rule_action    = "deny"                          # Deny traffic
+  cidr_block     = "0.0.0.0/0"                     # Deny all inbound traffic
+}
+
+# Default deny rule for private NACL
+resource "aws_network_acl_rule" "private_default_deny" {
+  network_acl_id = aws_network_acl.private_nacl.id  # Apply to the private NACL
+  rule_number    = 200                              # High rule number for default deny
+  egress         = false                            # Inbound traffic
+  protocol       = "-1"                             # All protocols
+  rule_action    = "deny"                           # Deny traffic
+  cidr_block     = "0.0.0.0/0"                      # Deny all inbound traffic
+}
+
+# Output variables
+output "public_nacl_id" {
+  description = "ID of the public NACL"  # Description for clarity
+  value       = aws_network_acl.public_nacl.id  # Output the public NACL ID
+}
+
+output "private_nacl_id" {
+  description = "ID of the private NACL"  # Description for clarity
+  value       = aws_network_acl.private_nacl.id  # Output the private NACL ID
+}
+
+
+---------------------------------
+### Module 4: Routing and Connectivity
+1. Route Tables
+   - Custom route table creation
+   - Route propagation
+   - Subnet associations
+   - Route priority
+2. NAT Configuration
+   - NAT Gateway setup
+   - NAT Instance alternatives
+   - High availability considerations
+   - Cost optimization strategies
+--------------------------------------
+# Provider configuration: AWS
+provider "aws" {
+  region = var.aws_region  # Specify the AWS region where resources will be created
+}
+
+# Input variables
+variable "aws_region" {
+  description = "The AWS region for resource creation"  # Describe the purpose of this variable
+  type        = string  # Define the variable type as a string
+  default     = "us-east-1"  # Set the default region
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"  # Define the IP range for the VPC
+  type        = string  # Define the variable type as a string
+  default     = "10.0.0.0/16"  # Set the default CIDR block
+}
+
+variable "public_subnet_cidr" {
+  description = "CIDR block for the public subnet"  # Define the IP range for the public subnet
+  type        = string  # Define the variable type as a string
+  default     = "10.0.1.0/24"  # Set the default CIDR block for the public subnet
+}
+
+variable "private_subnet_cidr" {
+  description = "CIDR block for the private subnet"  # Define the IP range for the private subnet
+  type        = string  # Define the variable type as a string
+  default     = "10.0.2.0/24"  # Set the default CIDR block for the private subnet
+}
+
+variable "use_nat_instance" {
+  description = "Whether to use a NAT Instance instead of a NAT Gateway"  # Option to choose between NAT Instance and NAT Gateway
+  type        = bool  # Define the variable type as a boolean
+  default     = false  # Default to using NAT Gateway
+}
+
+# VPC creation
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr  # Assign the CIDR block for the VPC from the variable
+  enable_dns_support   = true  # Enable DNS support in the VPC
+  enable_dns_hostnames = true  # Enable DNS hostnames in the VPC
+
+  tags = {
+    Name = "example-vpc"  # Assign a name tag to the VPC
+  }
+}
+
+# Public subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id  # Associate the subnet with the VPC
+  cidr_block              = var.public_subnet_cidr  # Assign the CIDR block for the public subnet
+  map_public_ip_on_launch = true  # Automatically assign public IP addresses to instances in this subnet
+
+  tags = {
+    Name = "public-subnet"  # Assign a name tag to the public subnet
+  }
+}
+
+# Private subnet
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id  # Associate the subnet with the VPC
+  cidr_block = var.private_subnet_cidr  # Assign the CIDR block for the private subnet
+
+  tags = {
+    Name = "private-subnet"  # Assign a name tag to the private subnet
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id  # Associate the Internet Gateway with the VPC
+
+  tags = {
+    Name = "example-igw"  # Assign a name tag to the Internet Gateway
+  }
+}
+
+# NAT Gateway Setup
+resource "aws_eip" "nat_eip" {
+  vpc = true  # Allocate an Elastic IP for use in the VPC
+
+  tags = {
+    Name = "nat-gateway-eip"  # Assign a name tag to the Elastic IP
+  }
+}
+
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = aws_eip.nat_eip.id  # Use the allocated Elastic IP for the NAT Gateway
+  subnet_id     = aws_subnet.public.id  # Place the NAT Gateway in the public subnet
+  depends_on    = [aws_internet_gateway.igw]  # Ensure the Internet Gateway is created before the NAT Gateway
+
+  tags = {
+    Name = "nat-gateway"  # Assign a name tag to the NAT Gateway
+  }
+}
+
+# NAT Instance Alternative (Optional)
+resource "aws_instance" "nat_instance" {
+  count = var.use_nat_instance ? 1 : 0  # Create the instance only if NAT Instance is enabled
+
+  ami           = data.aws_ami.nat_ami.id  # Use the NAT instance AMI
+  instance_type = "t2.micro"  # Specify the instance type for the NAT instance
+  subnet_id     = aws_subnet.public.id  # Place the NAT instance in the public subnet
+
+  tags = {
+    Name = "nat-instance"  # Assign a name tag to the NAT instance
+  }
+
+  user_data = <<-EOT
+    #!/bin/bash
+    echo "Enabling NAT instance forwarding"  # Enable IP forwarding
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE  # Configure NAT rules
+  EOT
+}
+
+# Data source for NAT instance AMI
+data "aws_ami" "nat_ami" {
+  most_recent = true  # Fetch the most recent AMI
+  filter {
+    name   = "name"  # Filter AMIs by name
+    values = ["amzn-ami-vpc-nat-*"]  # Use Amazon NAT AMIs
+  }
+  owners = ["amazon"]  # Only consider AMIs owned by Amazon
+}
+
+# Route Table for Public Subnet
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id  # Associate the route table with the VPC
+
+  route {
+    cidr_block = "0.0.0.0/0"  # Route all traffic
+    gateway_id = aws_internet_gateway.igw.id  # Route through the Internet Gateway
+  }
+
+  tags = {
+    Name = "public-route-table"  # Assign a name tag to the route table
+  }
+}
+
+# Associate Public Route Table with Public Subnet
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id  # Associate with the public subnet
+  route_table_id = aws_route_table.public.id  # Link to the public route table
+}
+
+# Route Table for Private Subnet
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id  # Associate the route table with the VPC
+
+  route {
+    cidr_block     = "0.0.0.0/0"  # Route all traffic
+    nat_gateway_id = var.use_nat_instance ? null : aws_nat_gateway.nat_gw.id  # Use NAT Gateway if enabled
+    instance_id    = var.use_nat_instance ? aws_instance.nat_instance[0].id : null  # Use NAT Instance if enabled
+  }
+
+  tags = {
+    Name = "private-route-table"  # Assign a name tag to the route table
+  }
+}
+
+# Associate Private Route Table with Private Subnet
+resource "aws_route_table_association" "private_assoc" {
+  subnet_id      = aws_subnet.private.id  # Associate with the private subnet
+  route_table_id = aws_route_table.private.id  # Link to the private route table
+}
+
+# Outputs
+output "vpc_id" {
+  description = "The ID of the created VPC"  # Output the VPC ID
+  value       = aws_vpc.main.id  # VPC ID value
+}
+
+output "public_subnet_id" {
+  description = "The ID of the public subnet"  # Output the public subnet ID
+  value       = aws_subnet.public.id  # Public subnet ID value
+}
+
+output "private_subnet_id" {
+  description = "The ID of the private subnet"  # Output the private subnet ID
+  value       = aws_subnet.private.id  # Private subnet ID value
+}
+
+output "nat_gateway_id" {
+  description = "The ID of the NAT Gateway (if created)"  # Output the NAT Gateway ID
+  value       = aws_nat_gateway.nat_gw.id  # NAT Gateway ID value
+}
+
+output "nat_instance_id" {
+  description = "The ID of the NAT Instance (if used)"  # Output the NAT Instance ID
+  value       = aws_instance.nat_instance.*.id  # NAT Instance ID value
+}
+
+-------------------------
+
+### Module 5: VPC Connectivity Options
+1. VPC Peering
+   - Peering connection setup
+   - Cross-region peering
+   - Route table configuration
+   - Security considerations
+2. Transit Gateway
+   - Transit Gateway configuration
+   - Attachment management
+   - Route table associations
+   - Multi-account setup
+--------------------------
+To set up VPC Connectivity with **VPC Peering** and **Transit Gateway** in Terraform, I'll provide you with two sections for each of the topics, along with explanations on how they are configured:
+
+### 1. **VPC Peering**
+
+- **VPC Peering Connection Setup**
+- **Cross-region Peering**
+- **Route Table Configuration**
+- **Security Considerations**
+
+### 2. **Transit Gateway**
+
+- **Transit Gateway Configuration**
+- **Attachment Management**
+- **Route Table Associations**
+- **Multi-account Setup**
+
+Below is the Terraform code that demonstrates both options with added comments:
+
+---
+
+### **VPC Peering Configuration**
+
+```hcl
+# Provider configuration: AWS
+provider "aws" {
+  region = var.aws_region  # AWS region for the provider
+}
+
+# Input variable: AWS region
+variable "aws_region" {
+  description = "The AWS region for resource creation"
+  type        = string
+  default     = "us-east-1"
+}
+
+# Input variable for VPC CIDR blocks
+variable "vpc_cidr_1" {
+  description = "CIDR block for the first VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "vpc_cidr_2" {
+  description = "CIDR block for the second VPC"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+# First VPC creation
+resource "aws_vpc" "vpc1" {
+  cidr_block           = var.vpc_cidr_1
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "VPC-1"
+  }
+}
+
+# Second VPC creation (for peering)
+resource "aws_vpc" "vpc2" {
+  cidr_block           = var.vpc_cidr_2
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "VPC-2"
+  }
+}
+
+# VPC Peering connection between VPC-1 and VPC-2
+resource "aws_vpc_peering_connection" "peering" {
+  vpc_id        = aws_vpc.vpc1.id  # ID of the first VPC
+  peer_vpc_id   = aws_vpc.vpc2.id  # ID of the second VPC
+  auto_accept   = false  # Set to true if you want automatic acceptance of the peering
+
+  tags = {
+    Name = "vpc-peering-connection"
+  }
+}
+
+# Route table update for VPC-1 (to allow routing to VPC-2)
+resource "aws_route" "vpc1_to_vpc2" {
+  route_table_id         = aws_vpc.vpc1.main_route_table_id
+  destination_cidr_block = var.vpc_cidr_2  # Route to VPC-2's CIDR block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peering.id
+}
+
+# Route table update for VPC-2 (to allow routing to VPC-1)
+resource "aws_route" "vpc2_to_vpc1" {
+  route_table_id         = aws_vpc.vpc2.main_route_table_id
+  destination_cidr_block = var.vpc_cidr_1  # Route to VPC-1's CIDR block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peering.id
+}
+
+# Security Group rule to allow traffic from the peer VPC
+resource "aws_security_group" "vpc1_sg" {
+  vpc_id = aws_vpc.vpc1.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_2]  # Allow traffic from VPC-2's CIDR block
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow outbound traffic
+  }
+}
+
+# Security Group rule to allow traffic from the peer VPC in VPC-2
+resource "aws_security_group" "vpc2_sg" {
+  vpc_id = aws_vpc.vpc2.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr_1]  # Allow traffic from VPC-1's CIDR block
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow outbound traffic
+  }
+}
+```
+
+### **Cross-region Peering**  
+If you want to peer VPCs across regions, you'll need to specify the `peer_region` in the `aws_vpc_peering_connection` resource.
+
+```hcl
+resource "aws_vpc_peering_connection" "peering_cross_region" {
+  vpc_id        = aws_vpc.vpc1.id
+  peer_vpc_id   = aws_vpc.vpc2.id
+  peer_region   = "us-west-2"  # Specify the region of the second VPC
+  auto_accept   = false
+
+  tags = {
+    Name = "cross-region-peering"
+  }
+}
+```
+
+---
+
+### **Transit Gateway Configuration**
+
+```hcl
+# Create a Transit Gateway
+resource "aws_ec2_transit_gateway" "tg" {
+  description = "Transit Gateway for VPC Connectivity"
+  amazon_side_asn = 64512  # ASN for the AWS side
+
+  tags = {
+    Name = "transit-gateway"
+  }
+}
+
+# Attach VPC-1 to the Transit Gateway
+resource "aws_ec2_transit_gateway_vpc_attachment" "tg_attachment_vpc1" {
+  transit_gateway_id = aws_ec2_transit_gateway.tg.id
+  vpc_id             = aws_vpc.vpc1.id
+  subnet_ids         = [aws_subnet.public.id]  # Attach the public subnet of VPC-1
+
+  tags = {
+    Name = "tg-attachment-vpc1"
+  }
+}
+
+# Attach VPC-2 to the Transit Gateway
+resource "aws_ec2_transit_gateway_vpc_attachment" "tg_attachment_vpc2" {
+  transit_gateway_id = aws_ec2_transit_gateway.tg.id
+  vpc_id             = aws_vpc.vpc2.id
+  subnet_ids         = [aws_subnet.public.id]  # Attach the public subnet of VPC-2
+
+  tags = {
+    Name = "tg-attachment-vpc2"
+  }
+}
+
+# Transit Gateway Route Table for VPC-1
+resource "aws_ec2_transit_gateway_route_table" "tg_route_table_vpc1" {
+  transit_gateway_id = aws_ec2_transit_gateway.tg.id
+
+  tags = {
+    Name = "tg-route-table-vpc1"
+  }
+}
+
+# Add a route to VPC-1's Transit Gateway Route Table
+resource "aws_ec2_transit_gateway_route" "tg_route_vpc1" {
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tg_route_table_vpc1.id
+  destination_cidr_block        = var.vpc_cidr_2  # Route to VPC-2
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.tg_attachment_vpc2.id  # Attach the route to VPC-2
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.tg_attachment_vpc2]
+}
+
+# Transit Gateway Route Table for VPC-2
+resource "aws_ec2_transit_gateway_route_table" "tg_route_table_vpc2" {
+  transit_gateway_id = aws_ec2_transit_gateway.tg.id
+
+  tags = {
+    Name = "tg-route-table-vpc2"
+  }
+}
+
+# Add a route to VPC-2's Transit Gateway Route Table
+resource "aws_ec2_transit_gateway_route" "tg_route_vpc2" {
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tg_route_table_vpc2.id
+  destination_cidr_block        = var.vpc_cidr_1  # Route to VPC-1
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.tg_attachment_vpc1.id  # Attach the route to VPC-1
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.tg_attachment_vpc1]
+}
+```
+
+### **Multi-account Setup**  
+In a multi-account scenario, you would attach VPCs from different AWS accounts to the same Transit Gateway.
+
+To achieve this, use `aws_ec2_transit_gateway_vpc_attachment` resources with the `resource_owner_id` argument to specify cross-account attachment. Ensure the target account has the required IAM policies to accept the attachment.
+
+```hcl
+resource "aws_ec2_transit_gateway_vpc_attachment" "tg_attachment_vpc1_account2" {
+  transit_gateway_id = aws_ec2_transit_gateway.tg.id
+  vpc_id             = aws_vpc.vpc1.id
+  subnet_ids         = [aws_subnet.public.id]
+
+  resource_owner_id = "123456789012"  # Specify the AWS account ID for the other account
+  tags = {
+    Name = "tg-attachment-vpc1-account2"
+  }
+}
+--------------------------
+### Module 6: Advanced Networking Features
+1. VPC Endpoints
+   - Interface endpoints
+   - Gateway endpoints
+   - Endpoint policies
+   - Private connectivity to AWS services
+2. Flow Logs
+   - VPC flow log configuration
+   - Log analysis and monitoring
+   - CloudWatch integration
+   - S3 and CloudWatch Logs as destinations
+-------------------------------
+
+-------------------------------
+### Module 7: Multi-Account Network Architecture
+1. Landing Zone Setup
+   - Account structure
+   - Network segmentation
+   - Shared services VPC
+   - Cross-account access
+
+2. Hybrid Connectivity
+   - Site-to-Site VPN
+   - Direct Connect setup
+   - BGP routing
+   - High availability design
+
+### Module 8: Security and Compliance
+1. Network Security Controls
+   - AWS Network Firewall
+   - GuardDuty integration
+   - Security Hub implementation
+   - WAF integration
+
+2. Compliance and Governance
+   - Network isolation patterns
+   - Compliance requirements
+   - Policy as code
+   - Automated compliance checks
+
+## Level 5: Infrastructure as Code Best Practices
+### Module 9: Terraform Advanced Concepts
+1. Module Development
+   - Custom module creation
+   - Module versioning
+   - Module composition
+   - Remote module usage
+
+2. State Management
+   - Remote state configuration
+   - State locking
+   - Workspace management
+   - State file backup strategies
+
+### Module 10: CI/CD Integration
+1. Pipeline Setup
+   - GitHub Actions integration
+   - AWS CodePipeline setup
+   - Automated testing
+   - Infrastructure deployment strategies
+
+2. Monitoring and Maintenance
+   - Infrastructure monitoring
+   - Cost optimization
+   - Performance metrics
+   - Automated remediation
+
+## Practical Assignments
+1. Basic VPC Setup
+   - Create a VPC with public and private subnets
+   - Implement basic routing
+   - Configure security groups
+
+2. Intermediate Implementation
+   - Set up VPC peering
+   - Implement NAT Gateway
+   - Configure VPC endpoints
+
+3. Advanced Architecture
+   - Build a multi-account network
+   - Implement Transit Gateway
+   - Set up hybrid connectivity
+
+4. Enterprise Project
+   - Design and implement a complete enterprise network
+   - Include security controls
+   - Implement monitoring and logging
+   - Deploy using CI/CD pipeline

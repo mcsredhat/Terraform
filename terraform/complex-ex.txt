@@ -1,0 +1,218 @@
+
+### **Terraform Code**
+```hcl
+# Terraform configuration for AWS provider
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "5.78.0" # Specify the AWS provider version
+    }
+  }
+}
+
+# AWS provider configuration
+provider "aws" {
+  region = "us-east-1" # Default AWS region for resources
+}
+
+# Input variables for project configuration
+variable "project_name" {
+  type        = string
+  description = "Name of the project"
+  default     = "vpn-nat-project" # Default project name
+}
+
+variable "vpcs" {
+  type = list(object({
+    name            = string
+    cidr_block      = string
+    public_subnets  = list(string)
+    private_subnets = list(string)
+    ec2_count       = number
+  }))
+  description = "Configuration for each VPC, including EC2 count, subnets, and VPN"
+  default = [
+    {
+      name            = "vpc1"
+      cidr_block      = "10.0.0.0/16"
+      public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
+      private_subnets = ["10.0.3.0/24"]
+      ec2_count       = 3
+    },
+    {
+      name            = "vpc2"
+      cidr_block      = "10.1.0.0/16"
+      public_subnets  = ["10.1.1.0/24"]
+      private_subnets = ["10.1.2.0/24"]
+      ec2_count       = 2
+    },
+    {
+      name            = "vpc3"
+      cidr_block      = "10.2.0.0/16"
+      public_subnets  = ["10.2.1.0/24", "10.2.2.0/24"]
+      private_subnets = ["10.2.3.0/24"]
+      ec2_count       = 3
+    }
+  ]
+}
+
+# Define local variables for tags and environment
+locals {
+  project_tag = var.project_name  # Tag for project name
+  environment = "dev"             # Default environment
+}
+
+# Create VPCs dynamically based on input
+resource "aws_vpc" "vpcs" {
+  for_each            = { for vpc in var.vpcs : vpc.name => vpc } # Iterate over each VPC definition
+  cidr_block          = each.value.cidr_block                    # CIDR block for the VPC
+  enable_dns_support  = true                                     # Enable DNS resolution in the VPC
+  enable_dns_hostnames = true                                    # Enable DNS hostnames in the VPC
+
+  tags = {
+    Name        = each.value.name                                # Tag with VPC name
+    Project     = local.project_tag                              # Tag with project name
+    Environment = local.environment                              # Tag with environment
+  }
+}
+
+# Create public subnets for each VPC
+resource "aws_subnet" "public_subnets" {
+  for_each = { for vpc in var.vpcs : vpc.name => vpc }           # Iterate over VPC definitions
+  count    = length(each.value.public_subnets)                  # Create a subnet for each public CIDR
+  vpc_id   = aws_vpc.vpcs[each.key].id                          # Associate subnet with VPC
+  cidr_block = each.value.public_subnets[count.index]           # Use CIDR blocks for public subnets
+  map_public_ip_on_launch = true                                # Automatically assign public IP
+
+  tags = {
+    Name        = "${each.key}-public-${count.index}"           # Tag with subnet name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Create private subnets for each VPC
+resource "aws_subnet" "private_subnets" {
+  for_each = { for vpc in var.vpcs : vpc.name => vpc }           # Iterate over VPC definitions
+  count    = length(each.value.private_subnets)                 # Create a subnet for each private CIDR
+  vpc_id   = aws_vpc.vpcs[each.key].id                          # Associate subnet with VPC
+  cidr_block = each.value.private_subnets[count.index]          # Use CIDR blocks for private subnets
+  map_public_ip_on_launch = false                               # Do not assign public IPs
+
+  tags = {
+    Name        = "${each.key}-private-${count.index}"          # Tag with subnet name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Create NAT Gateways for private subnet internet access
+resource "aws_eip" "nat_eip" {
+  for_each = aws_vpc.vpcs                                        # Allocate an Elastic IP for each VPC
+  tags = {
+    Name        = "${each.key}-nat-eip"                         # Tag with Elastic IP name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+resource "aws_nat_gateway" "nat_gateways" {
+  for_each = aws_vpc.vpcs                                        # Create a NAT gateway for each VPC
+  allocation_id = aws_eip.nat_eip[each.key].id                   # Use allocated Elastic IP
+  subnet_id     = aws_subnet.public_subnets[each.key][0].id      # Place NAT gateway in the first public subnet
+
+  tags = {
+    Name        = "${each.key}-nat-gateway"                     # Tag with NAT Gateway name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Create Internet Gateways for public subnet internet access
+resource "aws_internet_gateway" "igws" {
+  for_each = aws_vpc.vpcs                                        # Create an Internet Gateway for each VPC
+  vpc_id   = each.value.id                                       # Associate with the VPC
+
+  tags = {
+    Name        = "${each.key}-igw"                             # Tag with IGW name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Create route tables for public subnets
+resource "aws_route_table" "public_routes" {
+  for_each = aws_vpc.vpcs                                        # Create a route table for each VPC
+  vpc_id   = each.value.id                                       # Associate with the VPC
+
+  route {
+    cidr_block = "0.0.0.0/0"                                    # Route all traffic to the Internet Gateway
+    gateway_id = aws_internet_gateway.igws[each.key].id         # Use the Internet Gateway for routing
+  }
+
+  tags = {
+    Name        = "${each.key}-public-route-table"              # Tag with route table name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Associate public subnets with the public route tables
+resource "aws_route_table_association" "public_associations" {
+  for_each = aws_subnet.public_subnets                          # Iterate over public subnets
+  route_table_id = aws_route_table.public_routes[each.key].id   # Associate route table with subnet
+  subnet_id      = each.value.id                                # Associate with specific subnet
+}
+
+# Create route tables for private subnets
+resource "aws_route_table" "private_routes" {
+  for_each = aws_vpc.vpcs                                        # Create a private route table for each VPC
+  vpc_id   = each.value.id                                       # Associate with the VPC
+
+  route {
+    cidr_block = "0.0.0.0/0"                                    # Route all traffic to NAT Gateway
+    nat_gateway_id = aws_nat_gateway.nat_gateways[each.key].id  # Use the NAT Gateway for routing
+  }
+
+  tags = {
+    Name        = "${each.key}-private-route-table"             # Tag with route table name
+    Project     = local.project_tag                             # Tag with project name
+    Environment = local.environment                             # Tag with environment
+  }
+}
+
+# Associate private subnets with private route tables
+resource "aws_route_table_association" "private_associations" {
+  for_each = aws_subnet.private_subnets                         # Iterate over private subnets
+  route_table_id = aws_route_table.private_routes[each.key].id  # Associate route table with subnet
+  subnet_id      = each.value.id                                # Associate with specific subnet
+}
+
+# Outputs
+output "vpc_ids" {
+  value = aws_vpc.vpcs                                          # Output VPC IDs
+}
+
+output "nat_gateway_ids" {
+  value = aws_nat_gateway.nat_gateways                         # Output NAT Gateway IDs
+}
+
+output "internet_gateway_ids" {
+  value = aws_internet_gateway.igws                            # Output Internet Gateway IDs
+}
+
+### **Key Features:**
+1. **VPCs:** Three dynamically created VPCs.
+2. **NAT Gateway:** Enables internet access for private subnets.
+3. **Internet Gateway:** Provides internet access for public subnets.
+4. **Routing Tables:**
+   - Public route tables for traffic through Internet Gateways.
+   - Private route tables for traffic through NAT Gateways.
+5. **Dynamic Subnet Creation:** Public and private subnets for each VPC.
+6. **Reusable Tags:** Applied across all resources.
+7. **Outputs:** Includes VPC IDs, NAT Gateway IDs, and Internet Gateway IDs.
+
+This code is scalable, modular, and efficient for managing multiple VPCs
+
+, subnets, and routing requirements.

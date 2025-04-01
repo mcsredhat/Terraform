@@ -1,0 +1,66 @@
+# inter.tf Terraform configuration for multi-region deployment
+terraform {
+  # Specify the required providers
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"          # AWS provider source
+      version = "5.78.0"                 # Compatible with AWS provider version 5.x
+    }
+  }
+}
+
+# Configure the default AWS provider for the US East region
+provider "aws" {
+  region = "us-east-1"                   # Default AWS region
+}
+
+# Configure an additional AWS provider for the EU West region
+provider "aws" {
+  region = "eu-west-1"                   # Secondary AWS region
+  alias  = "eu"                          # Alias for differentiation
+}
+
+# Declare the input variable for instance type
+variable "instance_type" {
+  type        = string                   # Input must be a string
+  description = "Type of EC2 instance, e.g., t2.micro"
+  default     = "t2.micro"               # Default value for simplicity
+}
+
+# Declare local variables for dynamic naming
+locals {
+  project_name = "IntermediateProject"   # Project name used for tags
+}
+
+# Create an EC2 instance in the US East region
+resource "aws_instance" "us_instance" {
+  ami           = "ami-087c17d1fe0178315" # Example AMI ID
+  instance_type = var.instance_type       # Use the instance_type variable
+
+  # Add tags for resource identification
+  tags = {
+    Name = "USInstance-${local.project_name}" # Dynamic tag using project name
+  }
+}
+
+# Create an EC2 instance in the EU West region
+resource "aws_instance" "eu_instance" {
+  provider      = aws.eu                  # Use the aliased EU provider
+  ami           = "ami-05fa00d4c63e32376" # Example AMI ID
+  instance_type = var.instance_type       # Use the instance_type variable
+
+  # Add tags for resource identification
+  tags = {
+    Name = "EUInstance-${local.project_name}" # Dynamic tag using project name
+  }
+}
+
+# Output the public IP of the US instance
+output "us_public_ip" {
+  value = aws_instance.us_instance.public_ip # Retrieve public IP of US instance
+}
+
+# Output the public IP of the EU instance
+output "eu_public_ip" {
+  value = aws_instance.eu_instance.public_ip # Retrieve public IP of EU instance
+}

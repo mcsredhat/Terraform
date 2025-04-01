@@ -1,0 +1,621 @@
+VPC Peering
+   - Peering connection setup
+   - Cross-region peering
+   - Route table configuration
+   - Security considerations
+--------------------------------
+
+## **1. Basic VPC Peering Configuration**
+
+This basic configuration demonstrates a single VPC peering connection within the same region.
+
+
+# Input Variables
+variable "region" {
+  description = "AWS region for the resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "vpcs" {
+  description = "List of VPCs to create with names and CIDR blocks"
+  type = list(object({
+    name       = string
+    cidr_block = string
+  }))
+  default = [
+    { name = "VPC1", cidr_block = "10.0.0.0/16" },
+    { name = "VPC2", cidr_block = "10.1.0.0/16" }
+  ]
+}
+
+# AWS Provider Configuration
+provider "aws" {
+  region = var.region
+}
+
+# Create VPCs
+resource "aws_vpc" "vpc" {
+  for_each = { for v in var.vpcs : v.name => v }
+  cidr_block           = each.value.cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = each.key
+    Terraform = "true"
+  }
+}
+
+# VPC Peering Connection
+resource "aws_vpc_peering_connection" "peering" {
+  vpc_id        = aws_vpc.vpc["VPC1"].id
+  peer_vpc_id   = aws_vpc.vpc["VPC2"].id
+  auto_accept   = true
+
+  tags = {
+    Name = "peering-VPC1-VPC2"
+    Terraform = "true"
+  }
+}
+
+# Output Variables
+output "vpc_ids" {
+  description = "List of VPC IDs"
+  value       = { for k, v in aws_vpc.vpc : k => v.id }
+}
+
+output "peering_connection_id" {
+  description = "The ID of the VPC peering connection"
+  value       = aws_vpc_peering_connection.peering.id
+}
+-----------------------------------------
+
+## **2. Intermediate VPC Peering Configuration**
+
+This intermediate configuration includes multiple VPC peering connections and dynamic route table updates.
+
+# Input Variables
+variable "region" {
+  description = "AWS region for the resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "vpcs" {
+  description = "List of VPCs to create with names and CIDR blocks"
+  type = list(object({
+    name       = string
+    cidr_block = string
+  }))
+  default = [
+    { name = "VPC1", cidr_block = "10.0.0.0/16" },
+    { name = "VPC2", cidr_block = "10.1.0.0/16" },
+    { name = "VPC3", cidr_block = "10.2.0.0/16" }
+  ]
+}
+
+variable "peering_connections" {
+  description = "List of VPC peering relationships"
+  type = list(object({
+    requester_vpc = string
+    accepter_vpc  = string
+  }))
+  default = [
+    { requester_vpc = "VPC1", accepter_vpc = "VPC2" },
+    { requester_vpc = "VPC1", accepter_vpc = "VPC3" }
+  ]
+}
+
+# AWS Provider Configuration
+provider "aws" {
+  region = var.region
+}
+
+# Create VPCs
+resource "aws_vpc" "vpc" {
+  for_each = { for v in var.vpcs : v.name => v }
+  cidr_block           = each.value.cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = each.key
+    Terraform = "true"
+  }
+}
+
+# Create VPC Peering Connections
+resource "aws_vpc_peering_connection" "peering" {
+  for_each = { for pc in var.peering_connections : "${pc.requester_vpc}-${pc.accepter_vpc}" => pc }
+  vpc_id      = aws_vpc.vpc[each.value.requester_vpc].id
+  peer_vpc_id = aws_vpc.vpc[each.value.accepter_vpc].id
+  auto_accept = true
+
+  tags = {
+    Name = "peering-${each.key}"
+    Terraform = "true"
+  }
+}
+
+# Route Table Updates
+resource "aws_route" "requester_routes" {
+  for_each = aws_vpc_peering_connection.peering
+  route_table_id         = aws_vpc.vpc[each.value.requester_vpc].main_route_table_id
+  destination_cidr_block = aws_vpc.vpc[each.value.accepter_vpc].cidr_block
+  vpc_peering_connection_id = each.value.id
+}
+
+resource "aws_route" "accepter_routes" {
+  for_each = aws_vpc_peering_connection.peering
+  route_table_id         = aws_vpc.vpc[each.value.accepter_vpc].main_route_table_id
+  destination_cidr_block = aws_vpc.vpc[each.value.requester_vpc].cidr_block
+  vpc_peering_connection_id = each.value.id
+}
+
+# Output Variables
+output "vpc_ids" {
+  description = "List of VPC IDs"
+  value       = { for k, v in aws_vpc.vpc : k => v.id }
+}
+
+output "peering_connection_ids" {
+  description = "List of VPC peering connection IDs"
+  value       = { for k, v in aws_vpc_peering_connection.peering : k => v.id }
+}
+--------------------------------
+## **3. Advanced VPC Peering Configuration**
+
+This advanced configuration handles:
+- **Cross-region peering**.
+- **Dynamic routing for multiple peering connections**.
+- **Custom security group rules for enhanced control**.
+
+
+# Input Variables
+variable "regions" {
+  description = "AWS regions for the VPCs"
+  type        = list(string)
+  default     = ["us-east-1", "us-west-2"]
+}
+
+variable "vpcs" {
+  description = "List of VPCs with regions, names, and CIDR blocks"
+  type = list(object({
+    name       = string
+    cidr_block = string
+    region     = string
+  }))
+  default = [
+    { name = "VPC1", cidr_block = "10.0.0.0/16", region = "us-east-1" },
+    { name = "VPC2", cidr_block = "10.1.0.0/16", region = "us-west-2" }
+  ]
+}
+
+variable "peering_connections" {
+  description = "List of VPC peering relationships"
+  type = list(object({
+    requester_vpc = string
+    accepter_vpc  = string
+  }))
+  default = [
+    { requester_vpc = "VPC1", accepter_vpc = "VPC2" }
+  ]
+}
+
+variable "allowed_ports" {
+  description = "List of allowed ports for communication between VPCs"
+  type        = list(number)
+  default     = [22, 80, 443] # SSH, HTTP, HTTPS
+}
+
+# Providers for Cross-Region Resources
+provider "aws" {
+  alias  = "region_1"
+  region = var.regions[0]
+}
+
+provider "aws" {
+  alias  = "region_2"
+  region = var.regions[1]
+}
+
+# Create VPCs
+resource "aws_vpc" "vpc" {
+  for_each = { for v in var.vpcs : v.name => v }
+  provider  = each.value.region == var.regions[0] ? aws.region_1 : aws.region_2
+  cidr_block           = each.value.cidr_block
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = each.key
+    Terraform = "true"
+  }
+}
+
+# Security Groups for VPCs
+resource "aws_security_group" "vpc_sg" {
+  for_each = aws_vpc.vpc
+  provider = each.value.region == var.regions[0] ? aws.region_1 : aws.region_2
+  vpc_id   = each.value.id
+
+  name        = "sg-${each.key}"
+  description = "Security group for peered VPC communication"
+
+  tags = {
+    Name = "SG-${each.key}"
+    Terraform = "true"
+  }
+}
+
+# Ingress Rules for Peered Traffic
+resource "aws_security_group_rule" "ingress" {
+  for_each = {
+    for pc in var.peering_connections : "${pc.requester_vpc}-${pc.accepter_vpc}" => pc
+  }
+  provider      = aws.region_1
+  type          = "ingress"
+  security_group_id = aws_security_group.vpc_sg[each.value.requester_vpc].id
+  cidr_blocks   = [aws_vpc.vpc[each.value.accepter_vpc].cidr_block]
+  from_port     = min(var.allowed_ports)
+  to_port       = max(var.allowed_ports)
+  protocol      = "tcp"
+
+  description = "Allow traffic from ${each.value.accepter_vpc}"
+}
+
+# Egress Rules for Peered Traffic
+resource "aws_security_group_rule" "egress" {
+  for_each = {
+    for pc in var.peering_connections : "${pc.accepter_vpc}-${pc.requester_vpc}" => pc
+  }
+  provider      = aws.region_2
+  type          = "egress"
+  security_group_id = aws_security_group.vpc_sg[each.value.accepter_vpc].id
+  cidr_blocks   = [aws_vpc.vpc[each.value.requester_vpc].cidr_block]
+  from_port     = min(var.allowed_ports)
+  to_port       = max(var.allowed_ports)
+  protocol      = "tcp"
+
+  description = "Allow traffic to ${each.value.requester_vpc}"
+}
+
+# Create VPC Peering Connections
+resource "aws_vpc_peering_connection" "peering" {
+  for_each = { for pc in var.peering_connections : "${pc.requester_vpc}-${pc.accepter_vpc}" => pc }
+  provider        = aws.region_1
+  vpc_id          = aws_vpc.vpc[each.value.requester_vpc].id
+  peer_vpc_id     = aws_vpc.vpc[each.value.accepter_vpc].id
+  peer_region     = aws_vpc.vpc[each.value.accepter_vpc].region
+  auto_accept     = false
+
+  tags = {
+    Name = "peering-${each.key}"
+    Terraform = "true"
+  }
+}
+
+# Accept Peering in Accepter Region
+resource "aws_vpc_peering_connection_accepter" "peering_accept" {
+  for_each = aws_vpc_peering_connection.peering
+  provider = aws.region_2
+  vpc_peering_connection_id = each.value.id
+  auto_accept = true
+
+  tags = {
+    Name = "accept-${each.key}"
+    Terraform = "true"
+  }
+}
+
+# Dynamic Route Tables
+resource "aws_route" "requester_routes" {
+  for_each = aws_vpc_peering_connection.peering
+  provider = aws.region_1
+  route_table_id = aws_vpc.vpc[each.value.requester_vpc].main_route_table_id
+  destination_cidr_block = aws_vpc.vpc[each.value.accepter_vpc].cidr_block
+  vpc_peering_connection_id = each.value.id
+}
+
+resource "aws_route" "accepter_routes" {
+  for_each = aws_vpc_peering_connection.peering
+  provider = aws.region_2
+  route_table_id = aws_vpc.vpc[each.value.accepter_vpc].main_route_table_id
+  destination_cidr_block = aws_vpc.vpc[each.value.requester_vpc].cidr_block
+  vpc_peering_connection_id = each.value.id
+}
+
+# Output Variables
+output "vpc_ids" {
+  description = "Map of VPC names to their IDs"
+  value       = { for k, v in aws_vpc.vpc : k => v.id }
+}
+
+output "security_group_ids" {
+  description = "Map of VPC names to their security group IDs"
+  value       = { for k, v in aws_security_group.vpc_sg : k => v.id }
+}
+
+output "peering_connection_ids" {
+  description = "List of VPC peering connection IDs"
+  value       = { for k, v in aws_vpc_peering_connection.peering : k => v.id }
+}
+-------------------------------------
+
+4.# variables.tf
+
+# Define the AWS region
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
+# Define the CIDR block for VPC1
+variable "vpc1_cidr" {
+  description = "CIDR block for VPC1"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+# Define the CIDR block for VPC2
+variable "vpc2_cidr" {
+  description = "CIDR block for VPC2"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+# Define the name for VPC1
+variable "vpc1_name" {
+  description = "Name of VPC1"
+  type        = string
+  default     = "VPC1"
+}
+
+# Define the name for VPC2
+variable "vpc2_name" {
+  description = "Name of VPC2"
+  type        = string
+  default     = "VPC2"
+}
+
+# Define whether to auto-accept the peering connection
+variable "auto_accept_peering" {
+  description = "Auto accept peering connection"
+  type        = bool
+  default     = false
+}
+
+# Define the peer region for cross-region peering
+variable "peer_region" {
+  description = "Region of the peer VPC (for cross-region peering)"
+  type        = string
+  default     = "us-east-1"
+}
+
+# main.tf
+
+# Specify the AWS provider and region
+provider "aws" {
+  region = var.aws_region
+}
+
+# Create the first VPC
+resource "aws_vpc" "vpc1" {
+  cidr_block           = var.vpc1_cidr  # CIDR block for VPC1
+  enable_dns_support   = true           # Enable DNS support for the VPC
+  enable_dns_hostnames = true           # Enable DNS hostnames for the VPC
+  tags = {
+    Name = var.vpc1_name  # Tag for the VPC
+  }
+}
+
+# Create the second VPC
+resource "aws_vpc" "vpc2" {
+  cidr_block           = var.vpc2_cidr  # CIDR block for VPC2
+  enable_dns_support   = true           # Enable DNS support for the VPC
+  enable_dns_hostnames = true           # Enable DNS hostnames for the VPC
+  tags = {
+    Name = var.vpc2_name  # Tag for the VPC
+  }
+}
+
+# Establish a VPC peering connection between VPC1 and VPC2
+resource "aws_vpc_peering_connection" "peer" {
+  vpc_id        = aws_vpc.vpc1.id       # VPC ID for VPC1
+  peer_vpc_id   = aws_vpc.vpc2.id       # VPC ID for VPC2
+  auto_accept   = var.auto_accept_peering  # Whether to auto-accept the peering connection
+  peer_region   = var.peer_region       # Region of the peer VPC
+  tags = {
+    Name = "VPC-Peering-Connection"  # Tag for the peering connection
+  }
+}
+
+# Add a route in VPC1's route table for communication with VPC2
+resource "aws_route" "vpc1_to_vpc2" {
+  route_table_id         = aws_vpc.vpc1.main_route_table_id  # Main route table ID for VPC1
+  destination_cidr_block = var.vpc2_cidr                     # CIDR block for VPC2
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id  # Peering connection ID
+}
+
+# Add a route in VPC2's route table for communication with VPC1
+resource "aws_route" "vpc2_to_vpc1" {
+  route_table_id         = aws_vpc.vpc2.main_route_table_id  # Main route table ID for VPC2
+  destination_cidr_block = var.vpc1_cidr                     # CIDR block for VPC1
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id  # Peering connection ID
+}
+
+# Allow inbound traffic from VPC1 to VPC2 in VPC2's security group
+resource "aws_security_group_rule" "allow_vpc1_to_vpc2" {
+  type              = "ingress"          # Rule type (ingress)
+  from_port         = 0                   # Allow all ports
+  to_port           = 0                   # Allow all ports
+  protocol          = "-1"               # Allow all protocols
+  security_group_id = aws_vpc.vpc2.default_security_group_id  # Default security group for VPC2
+  cidr_blocks       = [var.vpc1_cidr]     # CIDR block for VPC1
+}
+
+# Allow inbound traffic from VPC2 to VPC1 in VPC1's security group
+resource "aws_security_group_rule" "allow_vpc2_to_vpc1" {
+  type              = "ingress"          # Rule type (ingress)
+  from_port         = 0                   # Allow all ports
+  to_port           = 0                   # Allow all ports
+  protocol          = "-1"               # Allow all protocols
+  security_group_id = aws_vpc.vpc1.default_security_group_id  # Default security group for VPC1
+  cidr_blocks       = [var.vpc2_cidr]     # CIDR block for VPC2
+}
+
+# outputs.tf
+
+# Output the ID of VPC1
+output "vpc1_id" {
+  value = aws_vpc.vpc1.id  # VPC1 ID
+}
+
+# Output the ID of VPC2
+output "vpc2_id" {
+  value = aws_vpc.vpc2.id  # VPC2 ID
+}
+
+# Output the ID of the VPC peering connection
+output "vpc_peering_connection_id" {
+  value = aws_vpc_peering_connection.peer.id  # Peering connection ID
+}
+
+
+
+=============================================================================
+5:# variables.tf
+
+# Define AWS region
+variable "aws_region" {
+  description = "The AWS region where resources will be created"
+  type        = string
+  default     = "us-east-1"
+}
+
+# Define VPC configurations
+variable "vpcs" {
+  description = "List of VPCs to create, including name and CIDR"
+  type = list(object({
+    name       = string      # Name of the VPC
+    cidr_block = string      # CIDR block for the VPC
+  }))
+  default = [
+    { name = "VPC1", cidr_block = "10.0.0.0/16" },
+    { name = "VPC2", cidr_block = "10.1.0.0/16" }
+  ]
+}
+
+# Define subnets configurations
+variable "subnets" {
+  description = "List of subnets for each VPC"
+  type = list(object({
+    vpc_name    = string    # Name of the VPC to associate the subnet
+    cidr_block  = string    # CIDR block of the subnet
+    public      = bool      # Indicates if the subnet is public or private
+  }))
+  default = [
+    { vpc_name = "VPC1", cidr_block = "10.0.1.0/24", public = true },
+    { vpc_name = "VPC2", cidr_block = "10.1.1.0/24", public = true }
+  ]
+}
+
+# Define security group rules
+variable "security_group_rules" {
+  description = "Security group rules for inbound traffic"
+  type = list(object({
+    description = string    # Description of the rule
+    from_port   = number    # Starting port for the rule
+    to_port     = number    # Ending port for the rule
+    protocol    = string    # Protocol (e.g., tcp, udp, icmp)
+    cidr_blocks = list(string) # Allowed CIDR blocks for the rule
+  }))
+  default = [
+    { description = "Allow HTTP", from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }
+  ]
+}
+
+# Define peering configurations
+variable "peering_config" {
+  description = "Configuration for VPC peering connections"
+  type = object({
+    requester_vpc = string  # Name of the requester VPC
+    accepter_vpc  = string  # Name of the accepter VPC
+  })
+  default = {
+    requester_vpc = "VPC1",
+    accepter_vpc  = "VPC2"
+  }
+}
+
+# main.tf
+
+# Specify AWS provider
+provider "aws" {
+  region = var.aws_region # Use the AWS region specified in the input variable
+}
+
+# Create VPCs using for_each loop
+resource "aws_vpc" "vpc" {
+  for_each           = { for v in var.vpcs : v.name => v }
+  cidr_block         = each.value.cidr_block # Set CIDR block from input variable
+  enable_dns_support = true                  # Enable DNS support for VPC
+  enable_dns_hostnames = true                # Enable DNS hostnames for VPC
+  tags = {
+    Name = each.key # Tag the VPC with its name
+  }
+}
+
+# Create subnets using for_each loop
+resource "aws_subnet" "subnet" {
+  for_each = { for s in var.subnets : "${s.vpc_name}-${s.cidr_block}" => s }
+  vpc_id   = aws_vpc.vpc[each.value.vpc_name].id # Associate subnet with the correct VPC
+  cidr_block = each.value.cidr_block            # Set CIDR block for the subnet
+  map_public_ip_on_launch = each.value.public   # Configure whether the subnet is public
+  tags = {
+    Name = "${each.value.vpc_name}-${each.value.cidr_block}" # Tag subnet with VPC and CIDR
+  }
+}
+
+# Create security groups for each VPC
+resource "aws_security_group" "sg" {
+  for_each = aws_vpc.vpc
+  vpc_id   = each.value.id    # Associate security group with the corresponding VPC
+  name     = "${each.key}-sg" # Name the security group with the VPC name
+  tags = {
+    Name = "${each.key}-sg"   # Tag security group with its name
+  }
+}
+
+# Add security group rules using dynamic blocks
+resource "aws_security_group_rule" "sg_rule" {
+  for_each = { for sg in aws_security_group.sg : sg.key => sg }
+  type              = "ingress"                          # Set rule type to ingress
+  from_port         = var.security_group_rules[0].from_port # Starting port for traffic
+  to_port           = var.security_group_rules[0].to_port   # Ending port for traffic
+  protocol          = var.security_group_rules[0].protocol  # Protocol to allow
+  cidr_blocks       = var.security_group_rules[0].cidr_blocks # Allowed CIDR blocks
+  security_group_id = each.value.id                       # Associate rule with the security group
+}
+
+# Create VPC peering connection
+resource "aws_vpc_peering_connection" "peer" {
+  vpc_id        = aws_vpc.vpc[var.peering_config.requester_vpc].id # Requester VPC
+  peer_vpc_id   = aws_vpc.vpc[var.peering_config.accepter_vpc].id # Accepter VPC
+  auto_accept   = true                                            # Automatically accept peering connection
+  tags = {
+    Name = "peering-${var.peering_config.requester_vpc}-${var.peering_config.accepter_vpc}" # Tag for the connection
+  }
+}
+
+# Add route table entries for peering
+resource "aws_route" "route" {
+  for_each = aws_vpc.vpc
+  route_table_id         = each.value.main_route_table_id          # Route table for the VPC
+  destination_cidr_block = each.key == var.peering_config.requester_vpc 
+                            ? aws_vpc.vpc[var.peering_config.accepter_vpc].cidr_block 
+                            : aws_vpc.vpc[var.peering_config.requester_vpc].cidr_block # Destination CIDR
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id # Use peering connection ID
+}

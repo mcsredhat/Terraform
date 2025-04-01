@@ -1,0 +1,1014 @@
+rewrite the terraform code  (4 basic examples) in AWS EC2 with detailed comments for every line.
+### **Basic Examples**
+
+#### **1. Create a Single IAM User**
+
+# Define a variable for the user name
+variable "user_name" {
+  description = "Name of the IAM user"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-user"                    # Default value for the variable
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = "us-west-2"                          # Set the AWS region
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "basic_user" {
+  name = var.user_name                          # Use the variable to set the user name
+}
+
+# Output the created user's name
+output "user_name" {
+  value = aws_iam_user.basic_user.name          # Display the created IAM user name
+}
+
+
+---
+
+#### **2. Attach a Policy to a Single User**
+
+# Define a variable for the policy name
+variable "policy_name" {
+  description = "Name of the IAM policy"        # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-policy"                 # Default value for the variable
+}
+
+# Define a variable for the user name
+variable "user_name" {
+  description = "Name of the IAM user"          # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-user"                   # Default value for the variable
+}
+
+# Create an IAM policy resource
+resource "aws_iam_policy" "basic_policy" {
+  name        = var.policy_name                # Use the variable to set the policy name
+  description = "Policy for basic user"        # A description of the policy
+  policy      = jsonencode({                   # Define the policy in JSON format
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of policy statements
+      {
+        Action   = "s3:ListAllMyBuckets"       # Allow listing of all S3 buckets
+        Effect   = "Allow"                    # Effect of the policy is to allow
+        Resource = "*"                        # Apply to all resources
+      }
+    ]
+  })
+}
+
+# Attach the created policy to the user
+resource "aws_iam_user_policy_attachment" "basic_attachment" {
+  user       = var.user_name                   # Attach to the user specified by the variable
+  policy_arn = aws_iam_policy.basic_policy.arn # Use the ARN of the created policy
+}
+
+# Output the policy ARN
+output "policy_arn" {
+  value = aws_iam_policy.basic_policy.arn      # Display the ARN of the created policy
+}
+
+
+---
+
+#### **3. Create an IAM Role**
+
+# Define a variable for the AWS region
+variable "aws_region" {
+  description = "AWS region where resources will be created"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+# Define a variable for the IAM policy name
+variable "policy_name" {
+  description = "Name of the IAM policy"
+  type        = string
+  default     = "basic-policy"
+}
+
+# Define a variable for the IAM user name
+variable "user_name" {
+  description = "Name of the IAM user"
+  type        = string
+  default     = "basic-user"
+}
+
+# Define a variable for the IAM role name
+variable "role_name" {
+  description = "Name of the IAM role"
+  type        = string
+  default     = "basic-role"
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = var.aws_region  # Use the variable to set the AWS region
+}
+
+# Create an IAM policy resource
+resource "aws_iam_policy" "basic_policy" {
+  name        = var.policy_name                # Use the variable to set the policy name
+  description = "Policy for basic user"        # A description of the policy
+  policy      = jsonencode({                   # Define the policy in JSON format
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of policy statements
+      {
+        Action   = "s3:ListAllMyBuckets"       # Allow listing of all S3 buckets
+        Effect   = "Allow"                    # Effect of the policy is to allow
+        Resource = "*"                        # Apply to all resources
+      }
+    ]
+  })
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "basic_user" {
+  name = var.user_name  # Use the variable to set the user name
+}
+
+# Attach the created policy to the user
+resource "aws_iam_user_policy_attachment" "basic_attachment" {
+  user       = aws_iam_user.basic_user.name    # Attach to the user specified by the resource
+  policy_arn = aws_iam_policy.basic_policy.arn # Use the ARN of the created policy
+}
+
+# Create an IAM role resource
+resource "aws_iam_role" "basic_role" {
+  name               = var.role_name           # Use the variable to set the role name
+  assume_role_policy = jsonencode({            # Define the trust relationship for the role
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of statements in the policy
+      {
+        Action    = "sts:AssumeRole"           # Allow the action to assume the role
+        Effect    = "Allow"                   # Effect of the policy is to allow
+        Principal = {                         # Define who can assume the role
+          Service = "ec2.amazonaws.com"       # EC2 service can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# Output the policy ARN
+output "policy_arn" {
+  value = aws_iam_policy.basic_policy.arn      # Display the ARN of the created policy
+}
+
+# Output the user name
+output "user_name" {
+  value = aws_iam_user.basic_user.name         # Display the name of the created user
+}
+
+# Output the role name
+output "role_name" {
+  value = aws_iam_role.basic_role.name         # Display the name of the created role
+}
+----------------------------------------------------
+
+#### **4. Create a Basic Inline Policy**
+
+# Define a variable for the AWS region
+variable "aws_region" {
+  description = "AWS region where resources will be created"
+  type        = string
+  default     = "us-east-1"  # Default AWS region
+}
+
+# Define a variable for the inline policy name
+variable "policy_name" {
+  description = "Name of the inline policy"
+  type        = string
+  default     = "basic-inline-policy"
+}
+
+# Define a variable for the IAM user name
+variable "user_name" {
+  description = "Name of the IAM user"
+  type        = string
+  default     = "basic-user"
+}
+
+# Define a variable for the IAM role name
+variable "role_name" {
+  description = "Name of the IAM role"
+  type        = string
+  default     = "basic-role"
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = var.aws_region  # Use the variable to set the AWS region
+}
+
+# Create an inline policy resource
+resource "aws_iam_policy" "basic_inline_policy" {
+  name        = var.policy_name                # Use the variable to set the policy name
+  description = "Basic inline policy"          # A description of the policy
+  policy      = jsonencode({                   # Define the policy in JSON format
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of policy statements
+      {
+        Action   = "s3:PutObject"             # Allow the action to put objects in S3
+        Effect   = "Allow"                   # Effect of the policy is to allow
+        Resource = "arn:aws:s3:::example-bucket/*" # Apply to all objects in the specified bucket
+      }
+    ]
+  })
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "basic_user" {
+  name = var.user_name  # Use the variable to set the user name
+}
+
+# Attach the created policy to the user
+resource "aws_iam_user_policy_attachment" "basic_attachment" {
+  user       = aws_iam_user.basic_user.name    # Attach to the user specified by the resource
+  policy_arn = aws_iam_policy.basic_inline_policy.arn # Use the ARN of the created inline policy
+}
+
+# Create an IAM role resource
+resource "aws_iam_role" "basic_role" {
+  name               = var.role_name           # Use the variable to set the role name
+  assume_role_policy = jsonencode({            # Define the trust relationship for the role
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of statements in the policy
+      {
+        Action    = "sts:AssumeRole"           # Allow the action to assume the role
+        Effect    = "Allow"                   # Effect of the policy is to allow
+        Principal = {                         # Define who can assume the role
+          Service = "ec2.amazonaws.com"       # EC2 service can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# Output the policy ARN
+output "policy_arn" {
+  value = aws_iam_policy.basic_inline_policy.arn      # Display the ARN of the created inline policy
+}
+
+# Output the user name
+output "user_name" {
+  value = aws_iam_user.basic_user.name         # Display the name of the created user
+}
+
+# Output the role name
+output "role_name" {
+  value = aws_iam_role.basic_role.name         # Display the name of the created role
+}
+-----------------------
+
+### **Complete Terraform Code**
+
+# Define a variable for the user name
+variable "user_name" {
+  description = "Name of the IAM user"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-user"                    # Default value for the variable
+}
+
+# Define a variable for the policy name
+variable "policy_name" {
+  description = "Name of the IAM policy or inline policy" # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-policy"                 # Default value for the policy name
+}
+
+# Define a variable for the IAM role name
+variable "role_name" {
+  description = "Name of the IAM role"          # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "basic-role"                   # Default value for the role name
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = "us-west-2"                          # Set the AWS region
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "basic_user" {
+  name = var.user_name                          # Use the variable to set the user name
+}
+
+# Output the created user's name
+output "user_name" {
+  value       = aws_iam_user.basic_user.name    # Display the created IAM user name
+  description = "The name of the created IAM user." # Description of the output
+}
+
+# Create an IAM policy resource
+resource "aws_iam_policy" "basic_policy" {
+  name        = var.policy_name                # Use the variable to set the policy name
+  description = "Policy for basic user"        # A description of the policy
+  policy      = jsonencode({                   # Define the policy in JSON format
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of policy statements
+      {
+        Action   = "s3:ListAllMyBuckets"       # Allow listing of all S3 buckets
+        Effect   = "Allow"                    # Effect of the policy is to allow
+        Resource = "*"                        # Apply to all resources
+      }
+    ]
+  })
+}
+
+# Attach the created policy to the IAM user
+resource "aws_iam_user_policy_attachment" "basic_attachment" {
+  user       = var.user_name                   # Attach to the user specified by the variable
+  policy_arn = aws_iam_policy.basic_policy.arn # Use the ARN of the created policy
+}
+
+# Output the policy ARN
+output "policy_arn" {
+  value       = aws_iam_policy.basic_policy.arn # Display the ARN of the created policy
+  description = "The ARN of the created IAM policy." # Description of the output
+}
+
+# Create an IAM role resource
+resource "aws_iam_role" "basic_role" {
+  name               = var.role_name           # Use the variable to set the role name
+  assume_role_policy = jsonencode({            # Define the trust relationship for the role
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of statements in the policy
+      {
+        Action    = "sts:AssumeRole"           # Allow the action to assume the role
+        Effect    = "Allow"                   # Effect of the policy is to allow
+        Principal = {                         # Define who can assume the role
+          Service = "ec2.amazonaws.com"       # EC2 service can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# Output the role name
+output "role_name" {
+  value       = aws_iam_role.basic_role.name   # Display the name of the created role
+  description = "The name of the created IAM role." # Description of the output
+}
+
+# Create an inline policy resource
+resource "aws_iam_policy" "basic_inline_policy" {
+  name        = "basic-inline-policy"          # Define a name for the inline policy
+  description = "Basic inline policy"          # A description of the policy
+  policy      = jsonencode({                   # Define the policy in JSON format
+    Version = "2012-10-17"                     # Specify the policy version
+    Statement = [                              # List of policy statements
+      {
+        Action   = "s3:PutObject"             # Allow the action to put objects in S3
+        Effect   = "Allow"                   # Effect of the policy is to allow
+        Resource = "arn:aws:s3:::example-bucket/*" # Apply to all objects in the specified bucket
+      }
+    ]
+  })
+}
+
+# Output the inline policy details
+output "inline_policy_name" {
+  value       = aws_iam_policy.basic_inline_policy.name # Display the inline policy name
+  description = "The name of the created inline policy." # Description of the output
+}
+---
+
+### **Intermediate Examples**
+
+#### **1. Multiple IAM Users with Groups**
+
+# Define a variable for the list of IAM users
+variable "users" {
+  description = "List of IAM users"              # A description of the variable
+  type        = list(string)                    # Type of the variable is a list of strings
+  default     = ["user1", "user2"]              # Default list of IAM user names
+}
+
+# Define a variable for the IAM group name
+variable "group_name" {
+  description = "Name of the IAM group"          # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "dev-group"                     # Default group name
+}
+
+# Create an IAM group resource
+resource "aws_iam_group" "dev_group" {
+  name = var.group_name                         # Use the variable to set the group name
+}
+
+# Create IAM users using a loop
+resource "aws_iam_user" "users" {
+  for_each = toset(var.users)                   # Loop through the list of user names
+  name     = each.key                           # Set the user name for each user
+}
+
+# Create a group membership resource
+resource "aws_iam_group_membership" "group_membership" {
+  group = aws_iam_group.dev_group.name          # Assign the group to the membership
+  users = aws_iam_user.users[*].name            # Add all created users to the group
+}
+
+# Output the list of group members
+output "group_members" {
+  value = aws_iam_group_membership.group_membership.users # Display the names of the group members
+}
+
+---
+
+#### **2. Role with Managed Policy**
+
+# Define a variable for the IAM role name
+variable "role_name" {
+  description = "Name of the IAM role"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "lambda-role"                   # Default role name
+}
+
+# Define a variable for the policy ARN
+variable "policy_arn" {
+  description = "ARN of the managed policy"      # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Default policy ARN
+}
+
+# Create an IAM role resource
+resource "aws_iam_role" "lambda_role" {
+  name               = var.role_name            # Use the variable to set the role name
+  assume_role_policy = jsonencode({             # Define the trust relationship for the role
+    Version = "2012-10-17"                      # Specify the policy version
+    Statement = [                               # List of statements in the policy
+      {
+        Action    = "sts:AssumeRole"            # Allow the action to assume the role
+        Effect    = "Allow"                    # Effect of the policy is to allow
+        Principal = {                          # Define who can assume the role
+          Service = "lambda.amazonaws.com"     # Lambda service can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# Attach the managed policy to the IAM role
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name    # Attach the policy to the created role
+  policy_arn = var.policy_arn                   # Use the policy ARN from the variable
+}
+
+
+---
+
+#### **3. User with Access Keys**
+
+# Define a variable for the IAM user name
+variable "user_name" {
+  description = "Name of the IAM user"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "access-user"                   # Default user name
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "access_user" {
+  name = var.user_name                          # Use the variable to set the user name
+}
+
+# Create an access key for the IAM user
+resource "aws_iam_access_key" "access_key" {
+  user = aws_iam_user.access_user.name          # Assign the access key to the created user
+}
+
+# Output the created access key ID
+output "access_key_id" {
+  value = aws_iam_access_key.access_key.id      # Display the access key ID
+}
+
+#### **4. Group Policy**
+
+# Define a variable for the IAM group name
+variable "group_name" {
+  description = "Name of the group"              # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "developers"                    # Default group name
+}
+
+# Define a variable for the group policy name
+variable "policy_name" {
+  description = "Name of the group policy"       # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "group-policy"                  # Default policy name
+}
+
+# Create an IAM group resource
+resource "aws_iam_group" "dev_group" {
+  name = var.group_name                         # Use the variable to set the group name
+}
+
+# Create a group policy resource
+resource "aws_iam_group_policy" "group_policy" {
+  name   = var.policy_name                      # Use the variable to set the policy name
+  group  = aws_iam_group.dev_group.name         # Attach the policy to the created group
+  policy = jsonencode({                         # Define the policy in JSON format
+    Version = "2012-10-17"                      # Specify the policy version
+    Statement = [                               # List of policy statements
+      {
+        Action   = ["ec2:StartInstances", "ec2:StopInstances"] # Allow actions for EC2 instances
+        Effect   = "Allow"                     # Effect of the policy is to allow
+        Resource = "*"                         # Apply to all resources
+      }
+    ]
+  })
+}
+
+
+### **Complete Terraform Code**
+
+```hcl
+# Define a variable for the IAM role name
+variable "role_name" {
+  description = "Name of the IAM role"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "lambda-role"                   # Default role name
+}
+
+# Define a variable for the policy ARN
+variable "policy_arn" {
+  description = "ARN of the managed policy"      # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" # Default policy ARN
+}
+
+# Define a variable for the IAM user name
+variable "user_name" {
+  description = "Name of the IAM user"           # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "access-user"                   # Default user name
+}
+
+# Define a variable for the IAM group name
+variable "group_name" {
+  description = "Name of the group"              # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "developers"                    # Default group name
+}
+
+# Define a variable for the group policy name
+variable "policy_name" {
+  description = "Name of the group policy"       # A description of the variable
+  type        = string                          # Type of the variable is a string
+  default     = "group-policy"                  # Default policy name
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = "us-west-2"                          # Set the AWS region
+}
+
+# Create an IAM role resource
+resource "aws_iam_role" "lambda_role" {
+  name               = var.role_name            # Use the variable to set the role name
+  assume_role_policy = jsonencode({             # Define the trust relationship for the role
+    Version = "2012-10-17"                      # Specify the policy version
+    Statement = [                               # List of statements in the policy
+      {
+        Action    = "sts:AssumeRole"            # Allow the action to assume the role
+        Effect    = "Allow"                    # Effect of the policy is to allow
+        Principal = {                          # Define who can assume the role
+          Service = "lambda.amazonaws.com"     # Lambda service can assume this role
+        }
+      }
+    ]
+  })
+}
+
+# Attach the managed policy to the IAM role
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name    # Attach the policy to the created role
+  policy_arn = var.policy_arn                   # Use the policy ARN from the variable
+}
+
+# Create an IAM user resource
+resource "aws_iam_user" "access_user" {
+  name = var.user_name                          # Use the variable to set the user name
+}
+
+# Create an access key for the IAM user
+resource "aws_iam_access_key" "access_key" {
+  user = aws_iam_user.access_user.name          # Assign the access key to the created user
+}
+
+# Create an IAM group resource
+resource "aws_iam_group" "dev_group" {
+  name = var.group_name                         # Use the variable to set the group name
+}
+
+# Create a group policy resource
+resource "aws_iam_group_policy" "group_policy" {
+  name   = var.policy_name                      # Use the variable to set the policy name
+  group  = aws_iam_group.dev_group.name         # Attach the policy to the created group
+  policy = jsonencode({                         # Define the policy in JSON format
+    Version = "2012-10-17"                      # Specify the policy version
+    Statement = [                               # List of policy statements
+      {
+        Action   = ["ec2:StartInstances", "ec2:StopInstances"] # Allow actions for EC2 instances
+        Effect   = "Allow"                     # Effect of the policy is to allow
+        Resource = "*"                         # Apply to all resources
+      }
+    ]
+  })
+}
+
+# Outputs to display resource details
+output "role_name" {
+  value       = aws_iam_role.lambda_role.name   # Display the name of the created role
+  description = "The name of the created IAM role." # Description of the output
+}
+
+output "policy_arn" {
+  value       = var.policy_arn                  # Display the policy ARN used
+  description = "The ARN of the attached managed policy." # Description of the output
+}
+
+output "access_key_id" {
+  value       = aws_iam_access_key.access_key.id # Display the access key ID
+  description = "The access key ID for the created IAM user." # Description of the output
+}
+
+output "group_name" {
+  value       = aws_iam_group.dev_group.name    # Display the name of the created group
+  description = "The name of the created IAM group." # Description of the output
+}
+
+output "group_policy_name" {
+  value       = aws_iam_group_policy.group_policy.name # Display the name of the group policy
+  description = "The name of the group policy attached to the IAM group." # Description of the output
+}
+
+-----------
+
+### **Advanced Examples**
+
+#### **1. Create IAM Role with Multiple Policies**
+
+# Variables
+variable "role_name" {
+  description = "Name of the IAM role"
+  type        = string
+  default     = "multi-policy-role"              # Default IAM role name
+}
+
+variable "policies" {
+  description = "List of policies to attach to the role"
+  type        = list(string)                     # List of policy ARNs
+  default     = [
+    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+    "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+  ]
+}
+
+# Provider
+provider "aws" {
+  region = "us-west-2"                           # AWS region
+}
+
+# Create IAM Role
+resource "aws_iam_role" "advanced_role" {
+  name               = var.role_name             # Assign role name from variable
+  assume_role_policy = jsonencode({              # Define trust relationship for the role
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"             # Role can be assumed
+        Effect    = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"          # EC2 service can assume the role
+        }
+      }
+    ]
+  })
+}
+
+# Attach Policies to IAM Role
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  for_each = toset(var.policies)                # Loop through each policy ARN
+  role     = aws_iam_role.advanced_role.name    # Attach to the created role
+  policy_arn = each.key                         # Use the current policy ARN
+}
+
+# Output
+output "attached_policies" {
+  value = var.policies                          # Output the attached policies
+}
+
+
+---
+
+#### **2. IAM User with MFA and Conditional Resource Creation**
+
+# Variables
+variable "user_name" {
+  description = "Name of the IAM user"
+  type        = string
+  default     = "secure-user"                   # Default user name
+}
+
+variable "enable_mfa" {
+  description = "Flag to enable MFA for the user"
+  type        = bool
+  default     = true                            # Enable MFA by default
+}
+
+# Provider
+provider "aws" {
+  region = "us-west-1"                          # AWS region
+}
+
+# Create IAM User
+resource "aws_iam_user" "secure_user" {
+  name = var.user_name                          # Assign user name from variable
+}
+
+# Conditional MFA Device Creation
+resource "aws_iam_virtual_mfa_device" "mfa_device" {
+  count                = var.enable_mfa ? 1 : 0 # Create MFA device only if enabled
+  user                 = aws_iam_user.secure_user.name
+  virtual_mfa_device_name = "${var.user_name}-mfa" # Dynamic MFA device name
+}
+
+# Output
+output "mfa_enabled" {
+  value = var.enable_mfa ? "MFA is enabled" : "MFA is not enabled" # Conditional output
+}
+
+
+---
+
+#### **3. IAM Policies with Complex Permissions**
+
+# Variables
+variable "policy_name" {
+  description = "Name of the advanced IAM policy"
+  type        = string
+  default     = "advanced-policy"               # Default policy name
+}
+
+# Provider
+provider "aws" {
+  region = "us-east-1"                          # AWS region
+}
+
+# Create an Advanced IAM Policy
+resource "aws_iam_policy" "complex_policy" {
+  name        = var.policy_name                 # Assign policy name from variable
+  description = "Policy with complex permissions" # Policy description
+  policy      = jsonencode({                    # Policy definition
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"                      # Allow EC2 actions
+        Action   = "ec2:*"
+        Resource = "*"                          # Apply to all EC2 resources
+      },
+      {
+        Effect   = "Allow"                      # Allow S3 actions
+        Action   = ["s3:ListBucket", "s3:GetObject"]
+        Resource = [
+          "arn:aws:s3:::example-bucket/*",      # Objects in the bucket
+          "arn:aws:s3:::example-bucket"         # The bucket itself
+        ]
+      }
+    ]
+  })
+}
+
+# Output
+output "policy_arn" {
+  value = aws_iam_policy.complex_policy.arn     # Output the created policy ARN
+}
+
+
+---
+
+#### **4. IAM Group with Conditional Group Membership**
+
+#### **4. IAM Group with Conditional Group Membership**
+
+# Variables
+variable "group_name" {
+  description = "Name of the IAM group"
+  type        = string
+  default     = "admin-group"                   # Default group name
+}
+
+variable "users" {
+  description = "List of users to add to the group"
+  type        = list(string)                    # List of user names
+  default     = ["admin1", "admin2"]            # Default users
+}
+
+variable "add_users" {
+  description = "Flag to add users to the group"
+  type        = bool
+  default     = true                            # Add users by default
+}
+
+# Provider
+provider "aws" {
+  region = "us-west-2"                          # AWS region
+}
+
+# Create IAM Group
+resource "aws_iam_group" "admin_group" {
+  name = var.group_name                         # Assign group name from variable
+}
+
+# Create IAM Users
+resource "aws_iam_user" "group_users" {
+  for_each = toset(var.users)                   # Loop through each user
+  name     = each.key                           # Assign user name
+}
+
+# Conditional Group Membership
+resource "aws_iam_group_membership" "admin_group_membership" {
+  count = var.add_users ? 1 : 0                 # Create membership only if add_users is true
+  name  = "admin-membership"                    # Membership name
+  group = aws_iam_group.admin_group.name        # Assign group name
+  users = [for user in aws_iam_user.group_users : user.name] # Add all users to the group
+}
+
+# Outputs
+output "group_name" {
+  description = "The name of the IAM group created"
+  value       = aws_iam_group.admin_group.name
+}
+
+output "group_membership_status" {
+  description = "Status of user addition to the group"
+  value       = var.add_users ? "Users added to group" : "Users not added to group" # Conditional output
+}
+
+output "user_list" {
+  description = "List of IAM users created"
+  value       = [for user in aws_iam_user.group_users : user.name]
+}
+-------------------
+
+### **Complete Terraform Code**
+
+# Variables for IAM Role with Multiple Policies
+variable "role_name" {
+  description = "Name of the IAM role"           # A description of the IAM role variable
+  type        = string                          # Type of the variable is string
+  default     = "multi-policy-role"             # Default IAM role name
+}
+
+variable "policies" {
+  description = "List of policies to attach to the role" # Description of policy ARNs list
+  type        = list(string)                    # Type of the variable is a list of strings
+  default     = [                               # Default list of policy ARNs
+    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+    "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+  ]
+}
+
+# Variables for IAM User with MFA
+variable "user_name" {
+  description = "Name of the IAM user"           # A description of the user name variable
+  type        = string                          # Type of the variable is string
+  default     = "secure-user"                   # Default user name
+}
+
+variable "enable_mfa" {
+  description = "Flag to enable MFA for the user" # Description of MFA toggle variable
+  type        = bool                            # Type of the variable is boolean
+  default     = true                            # Default is to enable MFA
+}
+
+# Variables for IAM Policies with Complex Permissions
+variable "policy_name" {
+  description = "Name of the advanced IAM policy" # Description of the policy name variable
+  type        = string                          # Type of the variable is string
+  default     = "advanced-policy"               # Default policy name
+}
+
+# Variables for IAM Group with Conditional Membership
+variable "group_name" {
+  description = "Name of the IAM group"          # A description of the group name variable
+  type        = string                          # Type of the variable is string
+  default     = "admin-group"                   # Default group name
+}
+
+variable "users" {
+  description = "List of users to add to the group" # Description of user list variable
+  type        = list(string)                    # Type of the variable is a list of strings
+  default     = ["admin1", "admin2"]            # Default list of users
+}
+
+variable "add_users" {
+  description = "Flag to add users to the group" # Description of add_users toggle variable
+  type        = bool                            # Type of the variable is boolean
+  default     = true                            # Default is to add users
+}
+
+# Provider Configuration
+provider "aws" {
+  region = "us-west-2"                          # AWS region where resources will be created
+}
+
+# Create IAM Role with Multiple Policies
+resource "aws_iam_role" "advanced_role" {
+  name               = var.role_name            # Assign role name from variable
+  assume_role_policy = jsonencode({             # Define trust relationship for the role
+    Version = "2012-10-17"                      # IAM policy version
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"            # Allow the action to assume the role
+        Effect    = "Allow"                    # Effect of the policy is to allow
+        Principal = {
+          Service = "ec2.amazonaws.com"         # Allow EC2 service to assume this role
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "role_policy_attachment" {
+  for_each = toset(var.policies)               # Iterate through the list of policies
+  role     = aws_iam_role.advanced_role.name   # Attach each policy to the created role
+  policy_arn = each.key                        # Use the current policy ARN
+}
+
+# Create IAM User with Conditional MFA
+resource "aws_iam_user" "secure_user" {
+  name = var.user_name                          # Assign user name from variable
+}
+
+resource "aws_iam_virtual_mfa_device" "mfa_device" {
+  count                = var.enable_mfa ? 1 : 0 # Create MFA device only if MFA is enabled
+  user                 = aws_iam_user.secure_user.name
+  virtual_mfa_device_name = "${var.user_name}-mfa" # Dynamic MFA device name
+}
+
+# Create Advanced IAM Policy with Complex Permissions
+resource "aws_iam_policy" "complex_policy" {
+  name        = var.policy_name                 # Assign policy name from variable
+  description = "Policy with complex permissions" # Description of the policy
+  policy      = jsonencode({                    # Policy definition
+    Version = "2012-10-17"                      # IAM policy version
+    Statement = [
+      {
+        Effect   = "Allow"                      # Allow EC2 actions
+        Action   = "ec2:*"
+        Resource = "*"                          # Apply to all EC2 resources
+      },
+      {
+        Effect   = "Allow"                      # Allow S3 actions
+        Action   = ["s3:ListBucket", "s3:GetObject"]
+        Resource = [
+          "arn:aws:s3:::example-bucket/*",      # Allow access to all objects in the bucket
+          "arn:aws:s3:::example-bucket"         # Allow access to the bucket itself
+        ]
+      }
+    ]
+  })
+}
+
+# Create IAM Group with Conditional Membership
+resource "aws_iam_group" "admin_group" {
+  name = var.group_name                         # Assign group name from variable
+}
+
+resource "aws_iam_user" "group_users" {
+  for_each = toset(var.users)                   # Iterate through the list of users
+  name     = each.key                           # Assign user name
+}
+
+resource "aws_iam_group_membership" "admin_group_membership" {
+  count = var.add_users ? 1 : 0                 # Create membership only if add_users is true
+  name  = "admin-membership"                    # Membership name
+  group = aws_iam_group.admin_group.name        # Assign group name
+  users = aws_iam_user.group_users[*].name      # Add all users to the group
+}
+
+# Outputs
+output "role_policies" {
+  value = var.policies                          # Output the list of attached policies
+  description = "List of policies attached to the role." # Description of the output
+}
+
+output "mfa_status" {
+  value = var.enable_mfa ? "MFA is enabled" : "MFA is not enabled" # Output MFA status
+  description = "Status of MFA for the IAM user." # Description of the output
+}
+
+output "policy_arn" {
+  value = aws_iam_policy.complex_policy.arn     # Output the created policy ARN
+  description = "The ARN of the advanced IAM policy." # Description of the output
+}
+
+output "group_membership_status" {
+  value = var.add_users ? "Users added to group" : "Users not added to group" # Output group membership status
+  description = "Status of the IAM group membership." # Description of the output
+}

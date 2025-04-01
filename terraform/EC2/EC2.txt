@@ -1,0 +1,1244 @@
+#### **EC2 Example**
+**Basic**: Launch a single EC2 instance  
+**Intermediate**: EC2 with a Security Group and Key Pair  
+**Advanced**: Auto-scaling EC2 with Load Balancer
+
+### **EC2 Examples with Terraform**
+
+#### **Basic**: Launch a Single EC2 Instance
+
+# Specify the AWS provider and region
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create a Key Pair for EC2 instance SSH access
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"           # Name of the key pair
+  public_key = file("~/.ssh/id_rsa.pub") # Path to your public SSH key
+}
+
+# Create an EC2 instance
+resource "aws_instance" "example_instance" {
+  ami           = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI (replace with a valid AMI ID for your region)
+  instance_type = "t2.micro"              # Instance type (small, inexpensive instance)
+
+  key_name      = aws_key_pair.example_key.key_name # Associate the Key Pair for SSH access
+
+  tags = {
+    Name = "Example-EC2-Basic"            # Tag to identify the instance
+  }
+}
+
+# Output the public IP address of the EC2 instance
+output "instance_public_ip" {
+  value = aws_instance.example_instance.public_ip # Display the public IP
+}
+
+
+##############################
+#  Basic Examples
+## ---------------------------
+# Complete Terraform Script: Launch a Single EC2 Instance
+# ---------------------------
+
+# Specify the required Terraform version
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.0"                          # Specify the provider version
+    }
+  }
+  required_version = ">= 1.0.0"                   # Specify Terraform version
+}
+
+# Define variables for dynamic configuration
+variable "region" {
+  default     = "us-west-2"                       # AWS region
+  description = "AWS region where resources will be created."
+}
+
+variable "ami_id" {
+  default     = "ami-0c02fb55956c7d316"           # Amazon Linux 2 AMI
+  description = "AMI ID for the EC2 instance."
+}
+
+variable "instance_type" {
+  default     = "t2.micro"                        # Instance type
+  description = "Instance type for the EC2 instance."
+}
+
+variable "key_pair_name" {
+  default     = "example-key"                     # SSH Key pair
+  description = "Name of the Key Pair for SSH access."
+}
+
+# AWS Provider configuration
+provider "aws" {
+  region = var.region                             # Use the region variable to set the AWS region
+}
+
+# Create a Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = var.key_pair_name                  # Use the variable for key pair name
+  public_key = file("~/.ssh/id_rsa.pub")          # Path to the public SSH key
+}
+
+# Launch a single EC2 instance
+resource "aws_instance" "basic_instance" {
+  ami           = var.ami_id                     # Use the AMI ID variable for instance image
+  instance_type = var.instance_type              # Use the instance type variable
+  key_name      = aws_key_pair.example_key.key_name # Attach the created Key Pair for SSH access
+
+  tags = {
+    Name = "Basic-EC2-Instance"                 # Assign a tag to identify the instance
+  }
+}
+
+# Output the public IP of the instance
+output "basic_instance_public_ip" {
+  value       = aws_instance.basic_instance.public_ip # Display the public IP of the instance
+  description = "The public IP of the Basic EC2 Instance."
+}
+
+# ---------------------------
+# Complete Terraform Script: Launch Multiple EC2 Instances
+# ---------------------------
+
+# Specify the required Terraform version
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.0"                          # Specify the provider version
+    }
+  }
+  required_version = ">= 1.0.0"                   # Specify Terraform version
+}
+
+# Define variables for dynamic configuration
+variable "region" {
+  default     = "us-west-2"                       # AWS region
+  description = "AWS region where resources will be created."
+}
+
+variable "ami_id" {
+  default     = "ami-0c02fb55956c7d316"           # Amazon Linux 2 AMI
+  description = "AMI ID for the EC2 instances."
+}
+
+variable "instance_type" {
+  default     = "t2.micro"                        # Instance type
+  description = "Instance type for the EC2 instances."
+}
+
+variable "key_pair_name" {
+  default     = "example-key"                     # SSH Key pair
+  description = "Name of the Key Pair for SSH access."
+}
+
+variable "instance_count" {
+  default     = 2                                 # Number of instances to launch
+  description = "Number of EC2 instances to launch."
+}
+
+# AWS Provider configuration
+provider "aws" {
+  region = var.region                             # Use the region variable to set the AWS region
+}
+
+# Create a Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = var.key_pair_name                  # Use the variable for key pair name
+  public_key = file("~/.ssh/id_rsa.pub")          # Path to the public SSH key
+}
+
+# Launch multiple EC2 instances
+resource "aws_instance" "multiple_instances" {
+  count         = var.instance_count             # Loop over the number of instances
+  ami           = var.ami_id                     # Use the AMI ID variable for the instance image
+  instance_type = var.instance_type              # Use the instance type variable
+  key_name      = aws_key_pair.example_key.key_name # Attach the created Key Pair for SSH access
+
+  tags = {
+    Name = "Basic-EC2-Instance-${count.index}"   # Assign a unique tag to each instance
+  }
+}
+
+# Output the public IPs of all instances
+output "multiple_instance_public_ips" {
+  value       = [for instance in aws_instance.multiple_instances : instance.public_ip] # Collect all public IPs
+  description = "The public IPs of the Basic EC2 Instances."
+}
+
+----------------------------------
+# ---------------------------
+# Complete Terraform Script: EC2 Instance with Conditional Tagging
+# ---------------------------
+
+# Specify the required Terraform version
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.0"                          # Specify the provider version
+    }
+  }
+  required_version = ">= 1.0.0"                   # Specify Terraform version
+}
+
+# Define variables for dynamic configuration
+variable "region" {
+  default     = "us-west-2"                       # AWS region
+  description = "AWS region where resources will be created."
+}
+
+variable "ami_id" {
+  default     = "ami-0c02fb55956c7d316"           # Amazon Linux 2 AMI
+  description = "AMI ID for the EC2 instance."
+}
+
+variable "instance_type" {
+  default     = "t2.micro"                        # Instance type
+  description = "Instance type for the EC2 instance."
+}
+
+variable "key_pair_name" {
+  default     = "example-key"                     # SSH Key pair
+  description = "Name of the Key Pair for SSH access."
+}
+
+variable "environment" {
+  default     = "production"                      # Default environment is production
+  description = "Environment for the EC2 instance (e.g., production, staging)."
+}
+
+# AWS Provider configuration
+provider "aws" {
+  region = var.region                             # Use the region variable to set the AWS region
+}
+
+# Create a Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = var.key_pair_name                  # Use the variable for key pair name
+  public_key = file("~/.ssh/id_rsa.pub")          # Path to the public SSH key
+}
+
+# Launch an EC2 instance with conditional tagging
+resource "aws_instance" "conditional_tags" {
+  ami           = var.ami_id                     # Use the AMI ID variable
+  instance_type = var.instance_type              # Use the instance type variable
+  key_name      = aws_key_pair.example_key.key_name # Attach the created Key Pair for SSH access
+
+  # Define tags with conditional logic
+  tags = {
+    Name        = "Tagged-EC2-Instance"          # General name for the instance
+    Environment = var.environment == "production" ? "Prod" : "Non-Prod" # Conditional tag for environment
+  }
+}
+
+# Output the public IP of the instance
+output "conditional_instance_public_ip" {
+  value       = aws_instance.conditional_tags.public_ip # Display the public IP of the created instance
+  description = "The public IP of the EC2 instance with conditional tagging."
+}
+
+----------------------------------
+# Specify the AWS provider and region
+provider "aws" {
+  region = "us-east-1"  # Change this to your desired AWS region
+}
+
+# Define the AMI and Instance Type variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (update to your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (change as needed)
+}
+
+# Define the user data script for EC2 instance
+variable "user_data" {
+  description = "User data script for EC2 instance to install and start Apache."
+  default = <<-EOT
+#!/bin/bash
+yum update -y
+yum install httpd -y
+systemctl start httpd
+systemctl enable httpd
+EOT
+}
+
+# Create an SSH Key Pair for EC2 access (Make sure to use your own public key)
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEArFqFHbsZqpo2RzLZp1Jb9R51mBoHqX21Rxx5yB7sNjswFgFpUwT8b1e7NhbktcIC6xQk7lBTT3oYwIm70l2Axy6tiAVtyl1OCEpTmb4PFlIZuor25y2seCXYpt4BR7g9Vp4P0J6cKg3TL6gYOX6MlzDFvdxtOAyF3dp0h5hE3Sywt4hV2w7YhV7D4AO8xl9n1tOoQx4zvBaRch8s="  # Replace with your actual public key
+}
+
+# Security group to allow SSH (port 22) and HTTP (port 80) access
+resource "aws_security_group" "allow_ssh_http" {
+  name        = "allow_ssh_http"
+  description = "Allow SSH and HTTP inbound traffic"
+  
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Launch an EC2 instance with user data
+resource "aws_instance" "instance_with_userdata" {
+  ami                    = var.ami_id                    # Use AMI ID variable
+  instance_type          = var.instance_type             # Use instance type variable
+  key_name               = aws_key_pair.example_key.key_name
+  user_data              = var.user_data                 # Attach user data script
+  security_group_names   = [aws_security_group.allow_ssh_http.name] # Attach security group
+  associate_public_ip_address = true                      # Automatically associate a public IP
+
+  tags = {
+    Name = "EC2-UserData-Instance"
+  }
+
+  # Optionally add a block to wait for the instance to be running and initialized
+  wait_for_steady_state = true
+}
+
+# Output the public IP address of the EC2 instance
+output "instance_public_ip" {
+  description = "The public IP of the EC2 instance"
+  value       = aws_instance.instance_with_userdata.public_ip
+}
+
+# ---------------------------
+# Intermediate Examples
+# ---------------------------
+#### **Intermediate**: EC2 with Security Group and Key Pair
+
+# Specify the AWS provider
+provider "aws" {
+  region = "us-west-2" # AWS region
+}
+
+# Create a Security Group
+resource "aws_security_group" "example_sg" {
+  name        = "example-security-group"       # Name of the security group
+  description = "Allow SSH and HTTP access"    # Description of the security group
+
+  ingress {
+    from_port   = 22                           # SSH port
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]                # Allow SSH from anywhere
+  }
+
+  ingress {
+    from_port   = 80                           # HTTP port
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]                # Allow HTTP from anywhere
+  }
+
+  egress {
+    from_port   = 0                            # Allow all outbound traffic
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Create a Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"                   # Name of the key pair
+  public_key = file("~/.ssh/id_rsa.pub")       # Path to your public SSH key
+}
+
+# Launch an EC2 instance
+resource "aws_instance" "example_instance" {
+  ami           = "ami-0c02fb55956c7d316"      # Amazon Linux 2 AMI (replace with valid AMI ID for your region)
+  instance_type = "t2.micro"                   # Instance type
+
+  key_name      = aws_key_pair.example_key.key_name # Associate the Key Pair
+  security_groups = [aws_security_group.example_sg.name] # Attach the Security Group
+
+  tags = {
+    Name = "Example-EC2-Intermediate"          # Tag for the instance
+  }
+}
+
+# Output the instance's public IP address
+output "instance_public_ip" {
+  value = aws_instance.example_instance.public_ip
+}
+
+---
+
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-east-1"  # Specify your region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Define ingress rules for the Security Group
+variable "security_group_rules" {
+  type = list(object({
+    from_port   = number                            # Starting port
+    to_port     = number                            # Ending port
+    protocol    = string                            # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                     # Allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },  # SSH
+    { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }   # HTTP
+  ]
+  description = "List of security group rules for ingress."
+}
+
+# Create a Security Group
+resource "aws_security_group" "example_sg" {
+  name        = "example-sg"                       # Security group name
+  description = "Allow SSH and HTTP traffic"
+
+  dynamic "ingress" {
+    for_each = var.security_group_rules             # Iterate over ingress rules
+    content {
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
+
+  egress {
+    from_port   = 0                                 # Allow all outbound traffic
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Launch an EC2 instance with Security Group
+resource "aws_instance" "intermediate_instance" {
+  ami               = var.ami_id                   # Use AMI ID variable
+  instance_type     = var.instance_type            # Use instance type variable
+  key_name          = aws_key_pair.example_key.key_name
+  security_groups   = [aws_security_group.example_sg.name]  # Attach Security Group
+
+  tags = {
+    Name = "Intermediate-EC2-Instance"
+  }
+}
+
+# Output the public IP of the instance
+output "intermediate_instance_public_ip" {
+  value       = aws_instance.intermediate_instance.public_ip
+  description = "The public IP of the Intermediate EC2 Instance."
+}
+================================
+# ---------------------------
+# Intermediate Examples
+# ---------------------------
+
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-east-1"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Define SSH Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEArFqFHbsZqpo2RzLZp1Jb9R51mBoHqX21Rxx5yB7sNjswFgFpUwT8b1e7NhbktcIC6xQk7lBTT3oYwIm70l2Axy6tiAVtyl1OCEpTmb4PFlIZuor25y2seCXYpt4BR7g9Vp4P0J6cKg3TL6gYOX6MlzDFvdxtOAyF3dp0h5hE3Sywt4hV2w7YhV7D4AO8xl9n1tOoQx4zvBaRch8s="  # Replace with your own public key
+}
+
+# Define ingress rules for the Security Group
+variable "security_group_rules" {
+  type = list(object({
+    from_port   = number                            # Starting port
+    to_port     = number                            # Ending port
+    protocol    = string                            # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                      # Allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },  # SSH
+    { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }   # HTTP
+  ]
+  description = "List of security group rules for ingress."
+}
+
+# Create a Security Group
+resource "aws_security_group" "example_sg" {
+  name        = "example-sg"                       # Security group name
+  description = "Allow SSH and HTTP traffic"
+
+  dynamic "ingress" {
+    for_each = var.security_group_rules             # Iterate over ingress rules
+    content {
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
+
+  egress {
+    from_port   = 0                                 # Allow all outbound traffic
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Launch an EC2 instance with Security Group
+resource "aws_instance" "intermediate_instance" {
+  ami               = var.ami_id                   # Use AMI ID variable
+  instance_type     = var.instance_type            # Use instance type variable
+  key_name          = aws_key_pair.example_key.key_name
+  security_groups   = [aws_security_group.example_sg.name]  # Attach Security Group
+  associate_public_ip_address = true               # Automatically assign a public IP
+
+  tags = {
+    Name = "Intermediate-EC2-Instance"
+  }
+}
+
+# Output the public IP of the instance
+output "intermediate_instance_public_ip" {
+  value       = aws_instance.intermediate_instance.public_ip
+  description = "The public IP of the Intermediate EC2 Instance."
+}
+------------------------------------------------------------
+# Example 2: EC2 with EBS Volume
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-west-2"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Define EBS volume size
+variable "ebs_volume_size" {
+  default     = 10                                  # Volume size in GB
+  description = "Size of the EBS volume."
+}
+
+# Define SSH Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEArFqFHbsZqpo2RzLZp1Jb9R51mBoHqX21Rxx5yB7sNjswFgFpUwT8b1e7NhbktcIC6xQk7lBTT3oYwIm70l2Axy6tiAVtyl1OCEpTmb4PFlIZuor25y2seCXYpt4BR7g9Vp4P0J6cKg3TL6gYOX6MlzDFvdxtOAyF3dp0h5hE3Sywt4hV2w7YhV7D4AO8xl9n1tOoQx4zvBaRch8s="  # Replace with your own public key
+}
+
+# Launch an EC2 instance
+resource "aws_instance" "intermediate_instance" {
+  ami               = var.ami_id                   # Use AMI ID variable
+  instance_type     = var.instance_type            # Use instance type variable
+  key_name          = aws_key_pair.example_key.key_name
+  associate_public_ip_address = true               # Automatically assign a public IP
+
+  tags = {
+    Name = "Intermediate-EC2-Instance"
+  }
+}
+
+# Create an EBS volume
+resource "aws_ebs_volume" "example_volume" {
+  availability_zone = "us-west-2a"                  # Availability zone for the volume
+  size              = var.ebs_volume_size           # Use the volume size variable
+  tags = {
+    Name = "Example-EBS-Volume"
+  }
+}
+
+# Attach the EBS volume to the EC2 instance
+resource "aws_volume_attachment" "example_attachment" {
+  device_name = "/dev/xvdf"                        # Device name (change if needed)
+  volume_id   = aws_ebs_volume.example_volume.id   # Attach the volume
+  instance_id = aws_instance.intermediate_instance.id  # Attach to the EC2 instance
+}
+
+# Output the public IP of the instance
+output "intermediate_instance_public_ip" {
+  value       = aws_instance.intermediate_instance.public_ip
+  description = "The public IP of the Intermediate EC2 Instance."
+}
+------------------------------------------------------------
+
+# Example 3: EC2 with CloudWatch Monitoring
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-west-2"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Define SSH Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEArFqFHbsZqpo2RzLZp1Jb9R51mBoHqX21Rxx5yB7sNjswFgFpUwT8b1e7NhbktcIC6xQk7lBTT3oYwIm70l2Axy6tiAVtyl1OCEpTmb4PFlIZuor25y2seCXYpt4BR7g9Vp4P0J6cKg3TL6gYOX6MlzDFvdxtOAyF3dp0h5hE3Sywt4hV2w7YhV7D4AO8xl9n1tOoQx4zvBaRch8s="  # Replace with your own public key
+}
+
+# Launch an EC2 instance with detailed monitoring enabled
+resource "aws_instance" "instance_with_monitoring" {
+  ami               = var.ami_id                       # Use AMI ID variable
+  instance_type     = var.instance_type                # Use instance type variable
+  key_name          = aws_key_pair.example_key.key_name
+  monitoring        = true                              # Enable detailed monitoring
+
+  tags = {
+    Name = "Instance-With-Monitoring"
+  }
+}
+
+# Allocate an Elastic IP (EIP)
+resource "aws_eip" "example_eip" {
+  instance = aws_instance.instance_with_monitoring.id  # Associate the Elastic IP with the instance
+}
+
+# Output the public IP of the instance (Elastic IP)
+output "instance_public_ip" {
+  value       = aws_eip.example_eip.public_ip
+  description = "The public IP (Elastic IP) of the instance with monitoring enabled."
+}
+
+# ---------------------------
+# Advanced Examples
+# ---------------------------
+
+#### **Advanced**: Auto-scaling EC2 with Load Balancer
+
+# Specify the AWS provider and region
+provider "aws" {
+  region = "us-west-2" # Define the AWS region where resources will be deployed
+}
+
+# Define input variable for the SSH key pair name
+variable "key_name" {
+  description = "Name of the SSH key pair" # Description of the variable
+  type        = string                    # Type of the variable
+  default     = "example-key"             # Default value for the variable
+}
+
+# Define input variable for the public SSH key path
+variable "public_key_path" {
+  description = "Path to the public SSH key" # Path to the SSH public key
+  type        = string                       # Type of the variable
+  default     = "~/.ssh/id_rsa.pub"          # Default file path for the SSH public key
+}
+
+# Define input variable for EC2 instance type
+variable "instance_type" {
+  description = "Instance type for EC2" # Description of the variable
+  type        = string                  # Type of the variable
+  default     = "t2.micro"              # Default EC2 instance type
+}
+
+# Define input variable for the Amazon Machine Image (AMI) ID
+variable "ami_id" {
+  description = "Amazon Machine Image ID" # Description of the variable
+  type        = string                    # Type of the variable
+  default     = "ami-0c02fb55956c7d316"   # Default Amazon Linux 2 AMI ID
+}
+
+# Define input variable for the minimum number of instances in the Auto-Scaling Group
+variable "min_size" {
+  description = "Minimum number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 1                                    # Default value for minimum size
+}
+
+# Define input variable for the maximum number of instances in the Auto-Scaling Group
+variable "max_size" {
+  description = "Maximum number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 3                                    # Default value for maximum size
+}
+
+# Define input variable for the desired number of instances in the Auto-Scaling Group
+variable "desired_capacity" {
+  description = "Desired number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 2                                    # Default value for desired capacity
+}
+
+# Define input variable for VPC subnet IDs
+variable "subnet_ids" {
+  description = "List of VPC Subnet IDs"           # Description of the variable
+  type        = list(string)                       # Type of the variable (list of strings)
+  default     = ["subnet-12345abc", "subnet-67890def"] # Default list of subnet IDs
+}
+
+# Define input variable for tags to apply to resources
+variable "tags" {
+  description = "Tags to apply to resources" # Description of the variable
+  type        = map(string)                  # Type of the variable (map of strings)
+  default = {
+    Environment = "Production"              # Tag for the environment
+    Project     = "AdvancedASG"             # Tag for the project name
+  }
+}
+
+# Define input variable for ingress rules for the security group
+variable "allowed_ingress_rules" {
+  description = "List of ingress rules for the security group" # Description of the variable
+  type = list(object({                                          # Type of the variable (list of objects)
+    from_port   = number                                       # Start of the port range
+    to_port     = number                                       # End of the port range
+    protocol    = string                                       # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                                # List of allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }, # Allow SSH
+    { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }  # Allow HTTP
+  ]
+}
+
+# Define input variable for egress rules for the security group
+variable "allowed_egress_rules" {
+  description = "List of egress rules for the security group" # Description of the variable
+  type = list(object({                                        # Type of the variable (list of objects)
+    from_port   = number                                     # Start of the port range
+    to_port     = number                                     # End of the port range
+    protocol    = string                                     # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                              # List of allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] } # Allow all traffic
+  ]
+}
+
+# Create an SSH key pair for EC2 instances
+resource "aws_key_pair" "example_key" {
+  key_name   = var.key_name               # Name of the SSH key pair
+  public_key = file(var.public_key_path) # Load the public key from the specified path
+}
+
+# Create a security group to allow traffic as defined in variables
+resource "aws_security_group" "example_sg" {
+  name        = "example-sg"             # Name of the security group
+  description = "Allow traffic as per rules" # Description of the security group
+
+  # Ingress rules
+  dynamic "ingress" {
+    for_each = var.allowed_ingress_rules # Iterate over the ingress rules defined in the variable
+    content {
+      from_port   = ingress.value.from_port # Start of the port range
+      to_port     = ingress.value.to_port   # End of the port range
+      protocol    = ingress.value.protocol # Protocol (e.g., TCP)
+      cidr_blocks = ingress.value.cidr_blocks # Allowed CIDR blocks
+    }
+  }
+
+  # Egress rules
+  dynamic "egress" {
+    for_each = var.allowed_egress_rules # Iterate over the egress rules defined in the variable
+    content {
+      from_port   = egress.value.from_port # Start of the port range
+      to_port     = egress.value.to_port   # End of the port range
+      protocol    = egress.value.protocol # Protocol (e.g., TCP)
+      cidr_blocks = egress.value.cidr_blocks # Allowed CIDR blocks
+    }
+  }
+
+  tags = var.tags # Apply tags to the security group
+}
+
+# Define a launch configuration for the Auto-Scaling Group
+resource "aws_launch_configuration" "example_lc" {
+  name          = "example-launch-configuration" # Name of the launch configuration
+  image_id      = var.ami_id                     # Use the AMI ID from the variable
+  instance_type = var.instance_type              # Use the instance type from the variable
+  key_name      = aws_key_pair.example_key.key_name # Use the SSH key pair
+
+  # Security groups
+  security_groups = [aws_security_group.example_sg.id] # Attach the security group
+
+  # Install and configure a web server
+  provisioner "remote-exec" {
+    inline = [
+      "sudo yum update -y",          # Update the instance
+      "sudo yum install -y httpd",  # Install Apache HTTP server
+      "sudo systemctl start httpd", # Start the HTTP server
+      "sudo systemctl enable httpd" # Enable HTTP server to start on boot
+    ]
+
+    # Connection details for the provisioner
+    connection {# Specify the AWS provider and region
+provider "aws" {
+  region = "us-west-2" # Define the AWS region where resources will be deployed
+}
+
+# Define input variable for the SSH key pair name
+variable "key_name" {
+  description = "Name of the SSH key pair" # Description of the variable
+  type        = string                    # Type of the variable
+  default     = "example-key"             # Default value for the variable
+}
+
+# Define input variable for the public SSH key path
+variable "public_key_path" {
+  description = "Path to the public SSH key" # Path to the SSH public key
+  type        = string                       # Type of the variable
+  default     = "~/.ssh/id_rsa.pub"          # Default file path for the SSH public key
+}
+
+# Define input variable for EC2 instance type
+variable "instance_type" {
+  description = "Instance type for EC2" # Description of the variable
+  type        = string                  # Type of the variable
+  default     = "t2.micro"              # Default EC2 instance type
+}
+
+# Define input variable for the Amazon Machine Image (AMI) ID
+variable "ami_id" {
+  description = "Amazon Machine Image ID" # Description of the variable
+  type        = string                    # Type of the variable
+  default     = "ami-0c02fb55956c7d316"   # Default Amazon Linux 2 AMI ID
+}
+
+# Define input variable for the minimum number of instances in the Auto-Scaling Group
+variable "min_size" {
+  description = "Minimum number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 1                                    # Default value for minimum size
+}
+
+# Define input variable for the maximum number of instances in the Auto-Scaling Group
+variable "max_size" {
+  description = "Maximum number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 3                                    # Default value for maximum size
+}
+
+# Define input variable for the desired number of instances in the Auto-Scaling Group
+variable "desired_capacity" {
+  description = "Desired number of instances in ASG" # Description of the variable
+  type        = number                                # Type of the variable
+  default     = 2                                    # Default value for desired capacity
+}
+
+# Define input variable for VPC subnet IDs
+variable "subnet_ids" {
+  description = "List of VPC Subnet IDs"           # Description of the variable
+  type        = list(string)                       # Type of the variable (list of strings)
+  default     = ["subnet-12345abc", "subnet-67890def"] # Default list of subnet IDs
+}
+
+# Define input variable for tags to apply to resources
+variable "tags" {
+  description = "Tags to apply to resources" # Description of the variable
+  type        = map(string)                  # Type of the variable (map of strings)
+  default = {
+    Environment = "Production"              # Tag for the environment
+    Project     = "AdvancedASG"             # Tag for the project name
+  }
+}
+
+# Define input variable for ingress rules for the security group
+variable "allowed_ingress_rules" {
+  description = "List of ingress rules for the security group" # Description of the variable
+  type = list(object({                                          # Type of the variable (list of objects)
+    from_port   = number                                       # Start of the port range
+    to_port     = number                                       # End of the port range
+    protocol    = string                                       # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                                # List of allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }, # Allow SSH
+    { from_port = 80, to_port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }  # Allow HTTP
+  ]
+}
+
+# Define input variable for egress rules for the security group
+variable "allowed_egress_rules" {
+  description = "List of egress rules for the security group" # Description of the variable
+  type = list(object({                                        # Type of the variable (list of objects)
+    from_port   = number                                     # Start of the port range
+    to_port     = number                                     # End of the port range
+    protocol    = string                                     # Protocol (e.g., TCP)
+    cidr_blocks = list(string)                              # List of allowed CIDR blocks
+  }))
+  default = [
+    { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] } # Allow all traffic
+  ]
+}
+
+# Create an SSH key pair for EC2 instances
+resource "aws_key_pair" "example_key" {
+  key_name   = var.key_name               # Name of the SSH key pair
+  public_key = file(var.public_key_path) # Load the public key from the specified path
+}
+
+# Create a security group to allow traffic as defined in variables
+resource "aws_security_group" "example_sg" {
+  name        = "example-sg"             # Name of the security group
+  description = "Allow traffic as per rules" # Description of the security group
+
+  # Ingress rules
+  dynamic "ingress" {
+    for_each = var.allowed_ingress_rules # Iterate over the ingress rules defined in the variable
+    content {
+      from_port   = ingress.value.from_port # Start of the port range
+      to_port     = ingress.value.to_port   # End of the port range
+      protocol    = ingress.value.protocol # Protocol (e.g., TCP)
+      cidr_blocks = ingress.value.cidr_blocks # Allowed CIDR blocks
+    }
+  }
+
+  # Egress rules
+  dynamic "egress" {
+    for_each = var.allowed_egress_rules # Iterate over the egress rules defined in the variable
+    content {
+      from_port   = egress.value.from_port # Start of the port range
+      to_port     = egress.value.to_port   # End of the port range
+      protocol    = egress.value.protocol # Protocol (e.g., TCP)
+      cidr_blocks = egress.value.cidr_blocks # Allowed CIDR blocks
+    }
+  }
+
+  tags = var.tags # Apply tags to the security group
+}
+
+# Define a launch configuration for the Auto-Scaling Group
+resource "aws_launch_configuration" "example_lc" {
+  name          = "example-launch-configuration" # Name of the launch configuration
+  image_id      = var.ami_id                     # Use the AMI ID from the variable
+  instance_type = var.instance_type              # Use the instance type from the variable
+  key_name      = aws_key_pair.example_key.key_name # Use the SSH key pair
+
+  # Security groups
+  security_groups = [aws_security_group.example_sg.id] # Attach the security group
+
+  # Install and configure a web server
+  provisioner "remote-exec" {
+    inline = [
+      "sudo yum update -y",          # Update the instance
+      "sudo yum install -y httpd",  # Install Apache HTTP server
+      "sudo systemctl start httpd", # Start the HTTP server
+      "sudo systemctl enable httpd" # Enable HTTP server to start on boot
+    ]
+
+    # Connection details for the provisioner
+    connection {
+      type        = "ssh"             # Use SSH for the connection
+      user        = "ec2-user"        # Default Amazon Linux user
+      private_key = file("~/.ssh/id_rsa") # Path to the private key
+      host        = self.private_ip   # Connect to the instance private IP
+    }
+  }
+
+  # Lifecycle rule to ensure safe replacement of the launch configuration
+  lifecycle {
+    create_before_destroy = true # Create new resource before destroying old one
+  }
+}
+
+# Create an Auto-Scaling Group
+resource "aws_autoscaling_group" "example_asg" {
+  launch_configuration = aws_launch_configuration.example_lc.id # Use the launch configuration
+  min_size             = var.min_size       # Minimum number of instances
+  max_size             = var.max_size       # Maximum number of instances
+  desired_capacity     = var.desired_capacity # Desired number of instances
+  vpc_zone_identifier  = var.subnet_ids     # List of VPC subnet IDs
+
+  # Tags for instances launched by the Auto-Scaling Group
+  tags = [
+    {
+      key                 = "Name"                  # Tag key
+      value               = "Example-ASG-Instance" # Tag value
+      propagate_at_launch = true                   # Apply the tag to launched instances
+    }
+  ]
+
+  # Lifecycle rule to ensure safe replacement of the Auto-Scaling Group
+  lifecycle {
+    create_before_destroy = true # Create new resource before destroying old one
+  }
+}
+
+      type        = "ssh"             # Use SSH for the connection
+      user        = "ec2-user"        # Default Amazon Linux user
+      private_key = file("~/.ssh/id_rsa") # Path to the private key
+      host        = self.private_ip   # Connect to the instance private IP
+    }
+  }
+
+  # Lifecycle rule to ensure safe replacement of the launch configuration
+  lifecycle {
+    create_before_destroy = true # Create new resource before destroying old one
+  }
+}
+
+# Create an Auto-Scaling Group
+resource "aws_autoscaling_group" "example_asg" {
+  launch_configuration = aws_launch_configuration.example_lc.id # Use the launch configuration
+  min_size             = var.min_size       # Minimum number of instances
+  max_size             = var.max_size       # Maximum number of instances
+  desired_capacity     = var.desired_capacity # Desired number of instances
+  vpc_zone_identifier  = var.subnet_ids     # List of VPC subnet IDs
+
+  # Tags for instances launched by the Auto-Scaling Group
+  tags = [
+    {
+      key                 = "Name"                  # Tag key
+      value               = "Example-ASG-Instance" # Tag value
+      propagate_at_launch = true                   # Apply the tag to launched instances
+    }
+  ]
+
+  # Lifecycle rule to ensure safe replacement of the Auto-Scaling Group
+  lifecycle {
+    create_before_destroy = true # Create new resource before destroying old one
+  }
+}
+---------------------
+# Example 1: Auto-Scaling Group with Load Balancer
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-west-2"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Define SSH Key Pair
+resource "aws_key_pair" "example_key" {
+  key_name   = "example-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEArFqFHbsZqpo2RzLZp1Jb9R51mBoHqX21Rxx5yB7sNjswFgFpUwT8b1e7NhbktcIC6xQk7lBTT3oYwIm70l2Axy6tiAVtyl1OCEpTmb4PFlIZuor25y2seCXYpt4BR7g9Vp4P0J6cKg3TL6gYOX6MlzDFvdxtOAyF3dp0h5hE3Sywt4hV2w7YhV7D4AO8xl9n1tOoQx4zvBaRch8s="  # Replace with your own public key
+}
+
+# Launch Configuration for Auto-Scaling Group
+resource "aws_launch_configuration" "example_lc" {
+  name          = "example-launch-config"
+  image_id      = var.ami_id                       # Use AMI ID variable
+  instance_type = var.instance_type                # Use instance type variable
+  key_name      = aws_key_pair.example_key.key_name
+
+  lifecycle {
+    create_before_destroy = true                   # Ensure replacement before destroying
+  }
+}
+
+# Auto-Scaling Group
+resource "aws_autoscaling_group" "example_asg" {
+  desired_capacity     = 2                         # Desired number of instances
+  max_size             = 3                         # Maximum instances
+  min_size             = 1                         # Minimum instances
+  launch_configuration = aws_launch_configuration.example_lc.name
+  vpc_zone_identifier  = ["subnet-12345678"]       # Subnet for the ASG (replace with your subnet ID)
+
+  tag {
+    key                 = "Name"
+    value               = "ASG-Instance"
+    propagate_at_launch = true
+  }
+}
+
+# Elastic Load Balancer (ELB)
+resource "aws_elb" "example_elb" {
+  name               = "example-elb"
+  availability_zones = ["us-west-2a", "us-west-2b"]  # Availability zones for the ELB
+
+  listener {
+    instance_port     = 80
+    instance_protocol = "HTTP"
+    lb_port           = 80
+    lb_protocol       = "HTTP"
+  }
+
+  health_check {
+    target              = "HTTP:80/"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+# Attach Auto-Scaling Group to Load Balancer
+resource "aws_autoscaling_attachment" "asg_elb_attachment" {
+  autoscaling_group_name = aws_autoscaling_group.example_asg.name
+  elb                   = aws_elb.example_elb.id
+}
+-----------------------------------------------
+# Example 2: EC2 with IAM Role
+# AWS Provider Configuration
+provider "aws" {
+  region = "us-west-2"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Create IAM Role for EC2 Instance
+resource "aws_iam_role" "example_role" {
+  name = "example-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Create IAM Policy to allow S3 access
+resource "aws_iam_policy" "example_policy" {
+  name        = "example-policy"
+  description = "Example policy to allow S3 access."
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["s3:*"]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Attach the IAM Policy to the IAM Role
+resource "aws_iam_role_policy_attachment" "example_role_attachment" {
+  role       = aws_iam_role.example_role.name
+  policy_arn = aws_iam_policy.example_policy.arn
+}
+
+# Create IAM Instance Profile for EC2
+resource "aws_iam_instance_profile" "example_instance_profile" {
+  name = "example-instance-profile"
+  role = aws_iam_role.example_role.name
+}
+
+# Launch EC2 instance with IAM Role
+resource "aws_instance" "instance_with_iam" {
+  ami                  = var.ami_id                       # Use AMI ID variable
+  instance_type        = var.instance_type                # Use instance type variable
+  key_name             = aws_key_pair.example_key.key_name
+  iam_instance_profile = aws_iam_instance_profile.example_instance_profile.name
+
+  tags = {
+    Name = "Instance-With-IAM"
+  }
+}
+-----------------------------------------------
+# Example 3: EC2 with Spot Instances
+# Provider Configuration
+provider "aws" {
+  region = "us-west-2"  # Specify your AWS region
+}
+
+# Define AMI ID and Instance Type Variables
+variable "ami_id" {
+  description = "The AMI ID for the EC2 instance"
+  default     = "ami-0c55b159cbfafe1f0"  # Example Amazon Linux 2 AMI ID (Update this for your region)
+}
+
+variable "instance_type" {
+  description = "The instance type for the EC2 instance"
+  default     = "t2.micro"  # Example instance type (Adjust as needed)
+}
+
+# Launch a Spot Instance Request
+resource "aws_spot_instance_request" "example_spot" {
+  ami           = var.ami_id                       # Use AMI ID variable
+  instance_type = var.instance_type                # Use instance type variable
+  spot_price    = "0.02"                           # Maximum bid price per hour
+
+  tags = {
+    Name = "Spot-Instance"
+  }
+}
+
+# Launch EC2 instances in Multiple Availability Zones
+resource "aws_instance" "multi_az_instances" {
+  count            = 2                                     # Launch 2 instances
+  ami              = var.ami_id                            # Use AMI ID variable
+  instance_type    = var.instance_type                     # Use instance type variable
+  availability_zone = element(["us-west-2a", "us-west-2b"], count.index)  # Distribute across 2 AZs
+
+  tags = {
+    Name = "Multi-AZ-Instance-${count.index}"
+  }
+}
+
+===============================

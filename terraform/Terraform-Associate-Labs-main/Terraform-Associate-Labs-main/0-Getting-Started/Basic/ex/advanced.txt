@@ -1,0 +1,79 @@
+#advanced.tf  Terraform configuration for remote state management
+terraform {
+  # Configure Terraform Cloud for state management
+  cloud {
+    hostname     = "app.terraform.io"    # Terraform Cloud hostname
+    organization = "ExamPro"             # Terraform Cloud organization name
+
+    workspaces {
+      name = "advanced-example"          # Workspace name for this project
+    }
+  }
+
+  # Specify the required providers
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"          # AWS provider source
+      version = "5.78.0"                 # Compatible with AWS provider version 5.x
+    }
+  }
+}
+
+# Configure the AWS provider
+provider "aws" {
+  region = "us-east-1"                   # AWS region for resources
+}
+
+# Declare input variables
+variable "instance_type" {
+  type        = string                   # Input must be a string
+  description = "Type of EC2 instance, e.g., t3.medium"
+  default     = "t3.medium"              # Default instance type
+}
+
+variable "project_name" {
+  type        = string                   # Input must be a string
+  description = "The project name for resource tagging"
+  default     = "AdvancedProject"        # Default project name
+}
+
+# Create a VPC using a Terraform module
+module "vpc" {
+  source              = "terraform-aws-modules/vpc/aws" # VPC module source
+  version             = "~> 3.0"          # Compatible with version 3.x
+
+  name                = var.project_name  # Name of the VPC
+  cidr                = "10.0.0.0/16"     # CIDR block for the VPC
+  azs                 = ["us-east-1a", "us-east-1b"] # Availability zones
+  public_subnets      = ["10.0.1.0/24", "10.0.2.0/24"] # Public subnet CIDRs
+  private_subnets     = ["10.0.3.0/24", "10.0.4.0/24"] # Private subnet CIDRs
+  enable_nat_gateway  = true              # Enable NAT gateway for private subnets
+  enable_vpn_gateway  = true              # Enable VPN gateway for VPC
+
+  tags = {
+    Environment = "Production"           # Tag to indicate environment
+    Terraform   = "true"                 # Tag to indicate Terraform-managed
+  }
+}
+
+# Create an EC2 instance in the public subnet
+resource "aws_instance" "public_instance" {
+  ami           = "ami-087c17d1fe0178315" # Example AMI ID
+  instance_type = var.instance_type       # Use the instance_type variable
+  subnet_id     = module.vpc.public_subnets[0] # Assign instance to the first public subnet
+
+  # Add tags for resource identification
+  tags = {
+    Name = "${var.project_name}-PublicInstance" # Dynamic tag using project name
+  }
+}
+
+# Output the public IP of the EC2 instance
+output "public_instance_ip" {
+  value = aws_instance.public_instance.public_ip # Retrieve public IP of instance
+}
+
+# Output the VPC ID
+output "vpc_id" {
+  value = module.vpc.vpc_id              # Retrieve the ID of the created VPC
+}

@@ -1,0 +1,145 @@
+
+## **1. Basic Example: Input and Output Variables**
+
+### **Purpose**: Create a single EC2 instance and output its public IP.
+
+#### `variables.tf`
+```hcl
+# Define an input variable for the EC2 instance type
+variable "instance_type" {
+  description = "The type of EC2 instance"  # Provide a description for the variable
+  type        = string                     # Specify the data type as a string
+  default     = "t2.micro"                 # Set the default instance type
+}
+```
+
+#### `main.tf`
+```hcl
+# Configure the AWS provider with the desired region
+provider "aws" {
+  region = "us-west-2"  # Set the AWS region
+}
+
+# Create an EC2 instance
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0" # Specify the Amazon Machine Image (AMI) ID
+  instance_type = var.instance_type       # Use the input variable for instance type
+
+  tags = {
+    Name = "BasicExampleInstance"         # Tag the instance for easy identification
+  }
+}
+```
+
+#### `outputs.tf`
+```hcl
+# Define an output variable to display the public IP of the instance
+output "instance_public_ip" {
+  description = "The public IP of the EC2 instance"  # Describe what the output represents
+  value       = aws_instance.example.public_ip      # Extract the public IP from the created instance
+}
+```
+
+---
+
+## **2. Intermediate Example: Input and Output Variables with Lists**
+
+### **Purpose**: Create multiple S3 buckets dynamically using a list and output their ARNs.
+
+#### `variables.tf`
+```hcl
+# Define an input variable for a list of S3 bucket names
+variable "bucket_names" {
+  description = "List of S3 bucket names"         # Description of the variable
+  type        = list(string)                      # Define the variable type as a list of strings
+  default     = ["bucket-one", "bucket-two", "bucket-three"]  # Default list of bucket names
+}
+```
+
+#### `main.tf`
+```hcl
+# Configure the AWS provider with the desired region
+provider "aws" {
+  region = "us-west-2"  # Set the AWS region
+}
+
+# Create S3 buckets dynamically using a count loop
+resource "aws_s3_bucket" "example" {
+  count  = length(var.bucket_names)        # Loop through the list of bucket names
+  bucket = var.bucket_names[count.index]   # Use each name from the list as the bucket name
+}
+```
+
+#### `outputs.tf`
+```hcl
+# Define an output variable to display the ARNs of all created S3 buckets
+output "bucket_arns" {
+  description = "ARNs of created S3 buckets"       # Describe what the output represents
+  value       = aws_s3_bucket.example[*].arn       # Use a splat operator to list all bucket ARNs
+}
+```
+
+---
+
+## **3. Advanced Example: Using Maps, Conditional Expressions, and Outputs**
+
+### **Purpose**: Create multiple EC2 instances with different types using a map and output their IDs and private IPs.
+
+#### `variables.tf`
+```hcl
+# Define an input variable for a map of VM names and their instance types
+variable "vm_config" {
+  description = "Map of VM names and instance types"  # Description of the variable
+  type        = map(string)                          # Define the variable type as a map of strings
+
+  # Default map with VM names as keys and instance types as values
+  default = {
+    "web-server" = "t2.micro"  # Small instance for the web server
+    "db-server"  = "t2.small"  # Medium instance for the database server
+    "cache-node" = "t3.micro"  # Small instance for the cache node
+  }
+}
+```
+
+#### `main.tf`
+```hcl
+# Configure the AWS provider with the desired region
+provider "aws" {
+  region = "us-west-2"  # Set the AWS region
+}
+
+# Create EC2 instances dynamically using a for_each loop
+resource "aws_instance" "example" {
+  for_each      = var.vm_config       # Loop through the keys (names) and values (types) in the map
+  ami           = "ami-0c55b159cbfafe1f0"  # Specify the AMI ID for the instances
+  instance_type = each.value          # Use the value from the map as the instance type
+
+  tags = {
+    Name = each.key                   # Use the key from the map as the instance name
+  }
+}
+```
+
+#### `outputs.tf`
+```hcl
+# Define an output variable to display a map of instance IDs and private IPs
+output "instance_details" {
+  description = "Map of instance IDs and private IPs"  # Describe what the output represents
+  value = {
+    for name, instance in aws_instance.example :       # Loop through the created instances
+    name => {                                         # Use the VM name as the key
+      id        = instance.id                         # Output the instance ID
+      private_ip = instance.private_ip                # Output the private IP
+    }
+  }
+}
+```
+
+---
+
+## **Summary of Changes**
+- Every line of Terraform code now includes detailed comments.
+- Comments explain the purpose of the variable, resource, or output block.
+- Each line provides clarity on Terraform syntax and usage.
+
+These commented examples ensure you can easily follow along and understand the concepts of input and output variables in Terraform. Let me know if further clarification is needed! 🚀
